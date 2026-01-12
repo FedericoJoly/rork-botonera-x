@@ -27,7 +27,7 @@ import { CURRENCIES } from '@/constants/products';
 import Colors from '@/constants/colors';
 import { useNavigationBlocker } from '@/hooks/navigation-blocker';
 import { useAuth } from '@/hooks/auth-store';
-import { createAndPopulateSpreadsheet } from '@/hooks/google-sheets-export';
+import { createAndExportSpreadsheet } from '@/hooks/google-sheets-export';
 import { databaseService } from '@/hooks/database';
 
 
@@ -530,7 +530,7 @@ export default function SetupScreen() {
     }
   };
 
-  const handleExportToGoogleSheets = async () => {
+  const handleExportToSpreadsheet = async () => {
     if (!currentUser || !currentEvent) {
       Alert.alert('Error', 'No event loaded');
       return;
@@ -543,10 +543,9 @@ export default function SetupScreen() {
 
     try {
       setIsExporting(true);
-      console.log('📊 Starting Google Sheets export...');
-      console.log('📤 Creating spreadsheet...');
+      console.log('📊 Starting spreadsheet export...');
       
-      const result = await createAndPopulateSpreadsheet({
+      const result = await createAndExportSpreadsheet({
         userName: currentUser.username,
         eventName: settings.eventName,
         transactions,
@@ -559,13 +558,8 @@ export default function SetupScreen() {
         },
       });
 
-      if (result.success && result.spreadsheetUrl) {
-        Alert.alert(
-          'Success!',
-          'Your data has been exported to Google Sheets',
-          [{ text: 'OK' }]
-        );
-        console.log('✅ Export complete:', result.spreadsheetUrl);
+      if (result.success) {
+        console.log('✅ Export complete');
       } else {
         Alert.alert('Error', result.error || 'Failed to export data');
       }
@@ -1108,12 +1102,12 @@ export default function SetupScreen() {
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={styles.exportButton}
-            onPress={handleExportToGoogleSheets}
+            onPress={handleExportToSpreadsheet}
             disabled={isExporting}
-            testID="export-google-sheets-button"
+            testID="export-spreadsheet-button"
           >
             <FileSpreadsheet size={20} color="white" />
-            <Text style={styles.exportButtonText}>{isExporting ? 'Exporting...' : 'GSheet'}</Text>
+            <Text style={styles.exportButtonText}>{isExporting ? 'Exporting...' : 'CSV'}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
