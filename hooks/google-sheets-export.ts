@@ -2,6 +2,7 @@ import { Transaction, Product, AppSettings } from '@/types/sales';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
+import * as XLSX from 'xlsx';
 
 interface ExportData {
   userName: string;
@@ -12,18 +13,9 @@ interface ExportData {
   exchangeRates: { [key: string]: number };
 }
 
-function escapeCSV(value: string | number | null | undefined): string {
-  if (value === null || value === undefined) return '';
-  const str = String(value);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
-
-function generateRegistryCSV(data: ExportData): string {
+function generateRegistryData(data: ExportData): (string | number)[][] {
   const headers = ['Transaction ID', 'Date', 'Time', 'Items', 'Subtotal', 'Discount', 'Total', 'Currency', 'Payment Method', 'Email', 'Promotions'];
-  const rows: string[][] = [headers];
+  const rows: (string | number)[][] = [headers];
 
   const sortedTransactions = [...data.transactions].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
@@ -40,9 +32,9 @@ function generateRegistryCSV(data: ExportData): string {
       date.toLocaleDateString(),
       date.toLocaleTimeString(),
       itemsList,
-      transaction.subtotal.toFixed(2),
-      transaction.discount.toFixed(2),
-      transaction.total.toFixed(2),
+      transaction.subtotal,
+      transaction.discount,
+      transaction.total,
       transaction.currency,
       transaction.paymentMethod,
       transaction.email || '',
@@ -50,13 +42,13 @@ function generateRegistryCSV(data: ExportData): string {
     ]);
   });
 
-  return rows.map(row => row.map(escapeCSV).join(',')).join('\n');
+  return rows;
 }
 
-function generateProductsCSV(data: ExportData): string {
+function generateProductsData(data: ExportData): (string | number)[][] {
   const mainCurrency = data.settings.currency;
   const headers = ['Product', 'Subgroup', 'Quantity Sold', `Total Amount (${mainCurrency})`];
-  const rows: string[][] = [headers];
+  const rows: (string | number)[][] = [headers];
 
   const productSales = new Map<string, { product: Product; quantity: number; amount: number }>();
 
@@ -88,17 +80,17 @@ function generateProductsCSV(data: ExportData): string {
       rows.push([
         product.name,
         product.subgroup || '',
-        quantity.toString(),
-        amount.toFixed(2),
+        quantity,
+        Math.round(amount * 100) / 100,
       ]);
     });
 
-  return rows.map(row => row.map(escapeCSV).join(',')).join('\n');
+  return rows;
 }
 
-function generateCurrenciesCSV(data: ExportData): string {
+function generateCurrenciesData(data: ExportData): (string | number)[][] {
   const headers = ['Currency', 'Payment Method', 'Transactions', 'Total Amount'];
-  const rows: string[][] = [headers];
+  const rows: (string | number)[][] = [headers];
 
   const currencySummary = new Map<string, Map<string, { count: number; total: number }>>();
 
@@ -129,35 +121,20 @@ function generateCurrenciesCSV(data: ExportData): string {
       rows.push([
         currency,
         method,
-        methodData.count.toString(),
-        methodData.total.toFixed(2),
+        methodData.count,
+        Math.round(methodData.total * 100) / 100,
       ]);
     });
   });
 
-  return rows.map(row => row.map(escapeCSV).join(',')).join('\n');
-}
-
-function generateFullCSV(data: ExportData): string {
-  const sections: string[] = [];
-
-  sections.push('=== REGISTRY DATA ===');
-  sections.push(generateRegistryCSV(data));
-  sections.push('');
-  sections.push('=== PRODUCTS SUMMARY ===');
-  sections.push(generateProductsCSV(data));
-  sections.push('');
-  sections.push('=== CURRENCIES SUMMARY ===');
-  sections.push(generateCurrenciesCSV(data));
-
-  return sections.join('\n');
+  return rows;
 }
 
 export async function createAndExportSpreadsheet(
   data: ExportData
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log('📊 Creating local spreadsheet...');
+    console.log('📊 Creating Excel spreadsheet...');
     console.log('📝 Export data:', {
       userName: data.userName,
       eventName: data.eventName,
@@ -165,26 +142,71 @@ export async function createAndExportSpreadsheet(
       productsCount: data.products.length,
     });
 
-    const csvContent = generateFullCSV(data);
+    const workbook = XLSX.utils.book_new();
+
+    const registryData = generateRegistryData(data);
+    const registrySheet = XLSX.utils.aoa_to_sheet(registryData);
+    registrySheet['!cols'] = [
+      { wch: 36 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 40 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 15 },
+      { wch: 25 },
+      { wch: 20 },
+    ];
+    XLSX.utils.book_append_sheet(workbook, registrySheet, 'Registry');
+
+    const productsData = generateProductsData(data);
+    const productsSheet = XLSX.utils.aoa_to_sheet(productsData);
+    productsSheet['!cols'] = [
+      { wch: 30 },
+      { wch: 20 },
+      { wch: 15 },
+      { wch: 20 },
+    ];
+    XLSX.utils.book_append_sheet(workbook, productsSheet, 'Products Summary');
+
+    const currenciesData = generateCurrenciesData(data);
+    const currenciesSheet = XLSX.utils.aoa_to_sheet(currenciesData);
+    currenciesSheet['!cols'] = [
+      { wch: 12 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 15 },
+    ];
+    XLSX.utils.book_append_sheet(workbook, currenciesSheet, 'Currencies Summary');
+
     const timestamp = new Date().toISOString().split('T')[0];
     const safeName = data.eventName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const fileName = `${safeName}_${timestamp}.csv`;
+    const fileName = `${safeName}_${timestamp}.xlsx`;
+
+    const xlsxData = XLSX.write(workbook, { type: 'base64', bookType: 'xlsx' });
 
     if (Platform.OS === 'web') {
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const binaryString = atob(xlsxData);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = fileName;
       link.click();
       URL.revokeObjectURL(url);
-      console.log('✅ File downloaded on web');
+      console.log('✅ Excel file downloaded on web');
       return { success: true };
     }
 
     const file = new File(Paths.cache, fileName);
-    file.write(csvContent);
-    console.log('📄 File created at:', file.uri);
+    file.write(xlsxData, { encoding: 'base64' });
+    console.log('📄 Excel file created at:', file.uri);
 
     const isAvailable = await Sharing.isAvailableAsync();
     if (!isAvailable) {
@@ -192,12 +214,12 @@ export async function createAndExportSpreadsheet(
     }
 
     await Sharing.shareAsync(file.uri, {
-      mimeType: 'text/csv',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       dialogTitle: 'Save Spreadsheet',
-      UTI: 'public.comma-separated-values-text',
+      UTI: 'org.openxmlformats.spreadsheetml.sheet',
     });
 
-    console.log('✅ File shared successfully');
+    console.log('✅ Excel file shared successfully');
     return { success: true };
   } catch (error: any) {
     console.error('❌ Error creating spreadsheet:', error);
