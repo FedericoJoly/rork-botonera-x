@@ -14,6 +14,7 @@ const GOOGLE_ANDROID_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.
 
 const redirectUri = makeRedirectUri({
   scheme: 'myapp',
+  preferLocalhost: true,
 });
 
 console.log('🔗 Google OAuth Redirect URI:', redirectUri);
