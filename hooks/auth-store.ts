@@ -5,7 +5,7 @@ import { User, Event } from '@/types/auth';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
-import { Platform } from 'react-native';
+
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -13,18 +13,15 @@ const GOOGLE_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.goo
 const GOOGLE_IOS_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
 const GOOGLE_ANDROID_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
 
-const redirectUri = Platform.OS === 'web' 
-  ? window.location.origin
-  : makeRedirectUri({
-      scheme: 'myapp',
-    });
+const redirectUri = makeRedirectUri({
+  scheme: 'myapp',
+  path: 'auth',
+});
 
 console.log('🔗 Google OAuth Redirect URI:', redirectUri);
-console.log('🌐 Current origin:', Platform.OS === 'web' ? window.location.origin : 'N/A');
-console.log('👆 Add this EXACT URI to Google Cloud Console:');
-console.log('   1. Authorized JavaScript origins:', redirectUri);
-console.log('   2. Authorized redirect URIs:', redirectUri);
-console.log('   Make sure OAuth client type is "Web application"');
+console.log('👆 Add this URI to Google Cloud Console:');
+console.log('   Authorized redirect URIs:', redirectUri);
+console.log('   Also add: https://auth.expo.io/@anonymous/botoneraX');
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
