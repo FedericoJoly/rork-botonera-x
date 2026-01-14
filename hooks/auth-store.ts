@@ -14,13 +14,17 @@ const GOOGLE_IOS_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps
 const GOOGLE_ANDROID_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
 
 const redirectUri = Platform.OS === 'web' 
-  ? 'https://cmud24i-anonymous-8081.exp.direct'
+  ? window.location.origin
   : makeRedirectUri({
       scheme: 'myapp',
     });
 
 console.log('🔗 Google OAuth Redirect URI:', redirectUri);
-console.log('👆 Add this URI to your Google Cloud Console > OAuth 2.0 Client > Authorized redirect URIs');
+console.log('🌐 Current origin:', Platform.OS === 'web' ? window.location.origin : 'N/A');
+console.log('👆 Add this EXACT URI to Google Cloud Console:');
+console.log('   1. Authorized JavaScript origins:', redirectUri);
+console.log('   2. Authorized redirect URIs:', redirectUri);
+console.log('   Make sure OAuth client type is "Web application"');
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
