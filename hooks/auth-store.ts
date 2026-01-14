@@ -5,6 +5,7 @@ import { User, Event } from '@/types/auth';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
+import { Platform } from 'react-native';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -12,10 +13,11 @@ const GOOGLE_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.goo
 const GOOGLE_IOS_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
 const GOOGLE_ANDROID_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
 
-const redirectUri = makeRedirectUri({
-  scheme: 'myapp',
-  preferLocalhost: true,
-});
+const redirectUri = Platform.OS === 'web' 
+  ? 'https://cmud24i-anonymous-8081.exp.direct'
+  : makeRedirectUri({
+      scheme: 'myapp',
+    });
 
 console.log('🔗 Google OAuth Redirect URI:', redirectUri);
 console.log('👆 Add this URI to your Google Cloud Console > OAuth 2.0 Client > Authorized redirect URIs');
