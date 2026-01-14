@@ -16,10 +16,15 @@ const GOOGLE_ANDROID_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.
 const redirectUri = makeRedirectUri({
   scheme: 'botoneraX',
   path: 'auth',
+  preferLocalhost: false,
 });
 
-console.log('🔗 Google OAuth redirect URI:', redirectUri);
-console.log('🔗 Add this to Google Cloud Console Authorized redirect URIs');
+console.log('\n========================================');
+console.log('🔗 GOOGLE OAUTH REDIRECT URI:');
+console.log(redirectUri);
+console.log('\n👆 Add this EXACT URI to Google Cloud Console:');
+console.log('   Credentials → OAuth 2.0 Client → Authorized redirect URIs');
+console.log('========================================\n');
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
