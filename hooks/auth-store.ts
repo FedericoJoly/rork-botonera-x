@@ -2,12 +2,27 @@ import createContextHook from '@nkzw/create-context-hook';
 import { useState, useEffect, useCallback } from 'react';
 import { databaseService } from './database';
 import { User, Event } from '@/types/auth';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
+
+WebBrowser.maybeCompleteAuthSession();
+
+const GOOGLE_CLIENT_ID = '1016355279200-7hh2qnftfi91ijpj9q5pc2t3qnlq6e8l.apps.googleusercontent.com';
+const GOOGLE_IOS_CLIENT_ID = '1016355279200-7hh2qnftfi91ijpj9q5pc2t3qnlq6e8l.apps.googleusercontent.com';
+const GOOGLE_ANDROID_CLIENT_ID = '1016355279200-7hh2qnftfi91ijpj9q5pc2t3qnlq6e8l.apps.googleusercontent.com';
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentEvent, setCurrentEvent] = useState<Event | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  const [request, , promptAsync] = Google.useAuthRequest({
+    clientId: GOOGLE_CLIENT_ID,
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+  });
 
   useEffect(() => {
     const loadAuthState = async () => {
@@ -105,6 +120,61 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
   }, [hashPassword]);
 
+  const loginWithGoogle = useCallback(async (): Promise<boolean> => {
+    try {
+      console.log('🔐 Starting Google Sign-In...');
+      setIsGoogleLoading(true);
+      
+      const result = await promptAsync();
+      
+      if (result?.type === 'success') {
+        const { authentication } = result;
+        
+        if (authentication?.accessToken) {
+          console.log('🔍 Fetching Google user info...');
+          const userInfoResponse = await fetch(
+            'https://www.googleapis.com/userinfo/v2/me',
+            {
+              headers: { Authorization: `Bearer ${authentication.accessToken}` },
+            }
+          );
+          
+          const googleUser = await userInfoResponse.json();
+          console.log('📧 Google user:', googleUser.email);
+          
+          let user = await databaseService.getUserByEmail(googleUser.email);
+          
+          if (!user) {
+            console.log('📝 Creating new user from Google account...');
+            user = await databaseService.createUserFromGoogle(
+              googleUser.id,
+              googleUser.email,
+              googleUser.name || googleUser.email.split('@')[0],
+              googleUser.picture
+            );
+          } else {
+            console.log('✅ Found existing user:', user.username);
+          }
+          
+          setCurrentUser(user);
+          setIsAuthenticated(true);
+          await databaseService.saveCurrentUser(user.id);
+          console.log('✅ Google Sign-In successful');
+          setIsGoogleLoading(false);
+          return true;
+        }
+      }
+      
+      console.log('❌ Google Sign-In cancelled or failed');
+      setIsGoogleLoading(false);
+      return false;
+    } catch (error) {
+      console.error('❌ Google Sign-In error:', error);
+      setIsGoogleLoading(false);
+      return false;
+    }
+  }, [promptAsync]);
+
   const register = useCallback(async (username: string, password: string, email: string = '', fullName: string = ''): Promise<boolean> => {
     try {
       console.log('📝 Attempting registration for:', username);
@@ -181,10 +251,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     currentEvent,
     isLoading,
     isAuthenticated,
+    isGoogleLoading,
     login,
+    loginWithGoogle,
     register,
     logout,
     selectEvent,
     clearCurrentEvent,
+    googleAuthRequest: request,
   };
 });

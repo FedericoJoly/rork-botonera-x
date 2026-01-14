@@ -5,6 +5,8 @@ export interface User {
   email: string;
   fullName: string;
   createdAt: Date;
+  googleId?: string;
+  avatarUrl?: string;
 }
 
 export interface Event {

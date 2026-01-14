@@ -11,12 +11,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { LogIn, UserPlus, KeyRound, Users } from 'lucide-react-native';
+import { LogIn, UserPlus, KeyRound, Users, Chrome } from 'lucide-react-native';
 import { useAuth } from '@/hooks/auth-store';
 import Colors from '@/constants/colors';
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle, isGoogleLoading, googleAuthRequest } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -63,6 +63,15 @@ export default function LoginScreen() {
 
   const handleForgotPassword = () => {
     router.push('/forgot-password');
+  };
+
+  const handleGoogleLogin = async () => {
+    console.log('🔐 Google login button pressed');
+    const success = await loginWithGoogle();
+    if (success) {
+      console.log('✅ Google login successful, navigating to event-manager');
+      router.replace('/event-manager');
+    }
   };
 
   const handleManageUsers = () => {
@@ -133,6 +142,23 @@ export default function LoginScreen() {
             >
               <UserPlus size={20} color={Colors.primary} />
               <Text style={styles.registerButtonText}>Create Account</Text>
+            </TouchableOpacity>
+
+            <View style={styles.dividerContainer}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.button, styles.googleButton, (!googleAuthRequest || isGoogleLoading) && styles.buttonDisabled]}
+              onPress={handleGoogleLogin}
+              disabled={!googleAuthRequest || isLoading || isGoogleLoading}
+            >
+              <Chrome size={20} color="#fff" />
+              <Text style={styles.buttonText}>
+                {isGoogleLoading ? 'Signing in...' : 'Continue with Google'}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -219,6 +245,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderWidth: 2,
     borderColor: Colors.primary,
+  },
+  googleButton: {
+    backgroundColor: '#4285F4',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e0e0e0',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    color: '#999',
+    fontSize: 14,
   },
   buttonDisabled: {
     opacity: 0.6,

@@ -1311,8 +1311,82 @@ class DatabaseService {
       passwordHash: result.passwordHash,
       email: result.email || '',
       fullName: result.fullName || '',
-      createdAt: new Date(result.createdAt)
+      createdAt: new Date(result.createdAt),
+      googleId: result.googleId,
+      avatarUrl: result.avatarUrl
     };
+  }
+
+  async getUserByEmail(email: string): Promise<User | null> {
+    await this.initialize();
+
+    if (Platform.OS === 'web') {
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.USERS);
+      if (!stored) return null;
+      const users: any[] = JSON.parse(stored);
+      const user = users.find(u => u.email === email);
+      return user ? { 
+        ...user, 
+        createdAt: new Date(user.createdAt), 
+        email: user.email || '', 
+        fullName: user.fullName || '',
+        googleId: user.googleId,
+        avatarUrl: user.avatarUrl
+      } : null;
+    }
+
+    if (!this.db) throw new Error('Database not initialized');
+
+    const result = await this.db.getFirstAsync(
+      'SELECT * FROM users WHERE email = ?',
+      [email]
+    ) as any;
+
+    if (!result) return null;
+
+    return {
+      id: result.id,
+      username: result.username,
+      passwordHash: result.passwordHash,
+      email: result.email || '',
+      fullName: result.fullName || '',
+      createdAt: new Date(result.createdAt),
+      googleId: result.googleId,
+      avatarUrl: result.avatarUrl
+    };
+  }
+
+  async createUserFromGoogle(googleId: string, email: string, fullName: string, avatarUrl?: string): Promise<User> {
+    await this.initialize();
+
+    const user: User = {
+      id: `google_${googleId}`,
+      username: email.split('@')[0],
+      passwordHash: '',
+      email,
+      fullName,
+      createdAt: new Date(),
+      googleId,
+      avatarUrl
+    };
+
+    if (Platform.OS === 'web') {
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.USERS);
+      const users: User[] = stored ? JSON.parse(stored) : [];
+      users.push(user);
+      await AsyncStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+      console.log('✅ Google user created in AsyncStorage');
+      return user;
+    }
+
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.runAsync(
+      'INSERT INTO users (id, username, passwordHash, email, fullName, createdAt, googleId, avatarUrl) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [user.id, user.username, user.passwordHash, user.email, user.fullName, user.createdAt.toISOString(), user.googleId || null, user.avatarUrl || null]
+    );
+    console.log('✅ Google user created in database');
+    return user;
   }
 
   async saveCurrentUser(userId: string): Promise<void> {
