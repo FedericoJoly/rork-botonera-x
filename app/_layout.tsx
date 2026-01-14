@@ -27,7 +27,9 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   useEffect(() => {
-    SplashScreen.hideAsync();
+    SplashScreen.hideAsync().catch(() => {
+      // Ignore error - splash screen may not be available on web or in certain dev scenarios
+    });
   }, []);
 
   return (
