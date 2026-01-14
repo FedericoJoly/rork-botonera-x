@@ -7,9 +7,9 @@ import * as WebBrowser from 'expo-web-browser';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const GOOGLE_CLIENT_ID = '1016355279200-7hh2qnftfi91ijpj9q5pc2t3qnlq6e8l.apps.googleusercontent.com';
-const GOOGLE_IOS_CLIENT_ID = '1016355279200-7hh2qnftfi91ijpj9q5pc2t3qnlq6e8l.apps.googleusercontent.com';
-const GOOGLE_ANDROID_CLIENT_ID = '1016355279200-7hh2qnftfi91ijpj9q5pc2t3qnlq6e8l.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
+const GOOGLE_IOS_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
+const GOOGLE_ANDROID_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
