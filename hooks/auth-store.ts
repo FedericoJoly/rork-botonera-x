@@ -150,85 +150,65 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     return new Promise((resolve) => {
       const GOOGLE_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
       
-      const width = 500;
-      const height = 600;
-      const left = window.screenX + (window.outerWidth - width) / 2;
-      const top = window.screenY + (window.outerHeight - height) / 2;
-      
-      const redirectUri = window.location.origin;
-      const scope = 'openid email profile';
-      const responseType = 'token';
-      
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${GOOGLE_CLIENT_ID}&` +
-        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-        `response_type=${responseType}&` +
-        `scope=${encodeURIComponent(scope)}&` +
-        `prompt=select_account`;
-      
-      console.log('🔐 Opening Google auth popup...');
-      console.log('🔗 Redirect URI:', redirectUri);
-      
-      const popup = window.open(
-        authUrl,
-        'Google Sign In',
-        `width=${width},height=${height},left=${left},top=${top},popup=yes`
-      );
-      
-      if (!popup) {
-        console.error('❌ Popup blocked');
-        resolve(false);
-        return;
-      }
-      
-      const checkInterval = setInterval(async () => {
-        try {
-          if (popup.closed) {
-            console.log('❌ Popup closed by user');
-            clearInterval(checkInterval);
-            setIsGoogleLoading(false);
-            resolve(false);
+      // Check if GSI script is loaded
+      const loadGSIScript = (): Promise<void> => {
+        return new Promise((resolveScript, rejectScript) => {
+          if ((window as any).google?.accounts) {
+            resolveScript();
             return;
           }
           
-          const popupUrl = popup.location.href;
-          
-          if (popupUrl.startsWith(redirectUri)) {
-            clearInterval(checkInterval);
-            
-            const hash = popup.location.hash.substring(1);
-            const params = new URLSearchParams(hash);
-            const accessToken = params.get('access_token');
-            
-            popup.close();
-            
-            if (accessToken) {
-              console.log('✅ Got access token from popup');
-              const success = await processGoogleAuth(accessToken);
-              if (success) {
-                setGoogleAuthSuccess(true);
-              }
-              setIsGoogleLoading(false);
-              resolve(success);
-            } else {
-              console.log('❌ No access token in response');
-              setIsGoogleLoading(false);
-              resolve(false);
-            }
-          }
-        } catch {
-          // Cross-origin error - popup is still on Google's domain, keep waiting
-        }
-      }, 500);
+          const script = document.createElement('script');
+          script.src = 'https://accounts.google.com/gsi/client';
+          script.async = true;
+          script.defer = true;
+          script.onload = () => resolveScript();
+          script.onerror = () => rejectScript(new Error('Failed to load Google Sign-In'));
+          document.head.appendChild(script);
+        });
+      };
       
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        if (!popup.closed) {
-          popup.close();
-        }
-        setIsGoogleLoading(false);
-        resolve(false);
-      }, 120000);
+      loadGSIScript()
+        .then(() => {
+          console.log('🔐 Initializing Google Sign-In...');
+          
+          const google = (window as any).google;
+          
+          const tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: 'openid email profile',
+            callback: async (response: any) => {
+              if (response.error) {
+                console.error('❌ Google auth error:', response.error);
+                setIsGoogleLoading(false);
+                resolve(false);
+                return;
+              }
+              
+              if (response.access_token) {
+                console.log('✅ Got access token from Google');
+                const success = await processGoogleAuth(response.access_token);
+                if (success) {
+                  setGoogleAuthSuccess(true);
+                }
+                setIsGoogleLoading(false);
+                resolve(success);
+              } else {
+                console.log('❌ No access token in response');
+                setIsGoogleLoading(false);
+                resolve(false);
+              }
+            },
+          });
+          
+          console.log('🔐 Requesting access token...');
+          tokenClient.requestAccessToken({ prompt: 'select_account' });
+        })
+        .catch((error) => {
+          console.error('❌ Failed to load Google Sign-In:', error);
+          setIsGoogleLoading(false);
+          resolve(false);
+        });
     });
   }, [processGoogleAuth]);
 
