@@ -1,30 +1,8 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useState, useEffect, useCallback } from 'react';
+import { Platform } from 'react-native';
 import { databaseService } from './database';
 import { User, Event } from '@/types/auth';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri } from 'expo-auth-session';
-
-
-WebBrowser.maybeCompleteAuthSession();
-
-const GOOGLE_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
-const GOOGLE_IOS_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
-const GOOGLE_ANDROID_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
-
-const redirectUri = makeRedirectUri({
-  scheme: 'botoneraX',
-  path: 'auth',
-  preferLocalhost: false,
-});
-
-console.log('\n========================================');
-console.log('🔗 GOOGLE OAUTH REDIRECT URI:');
-console.log(redirectUri);
-console.log('\n👆 Add this EXACT URI to Google Cloud Console:');
-console.log('   Credentials → OAuth 2.0 Client → Authorized redirect URIs');
-console.log('========================================\n');
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -32,14 +10,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: GOOGLE_CLIENT_ID,
-    iosClientId: GOOGLE_IOS_CLIENT_ID,
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-    webClientId: GOOGLE_CLIENT_ID,
-    redirectUri,
-  });
+  const [googleAuthSuccess, setGoogleAuthSuccess] = useState(false);
 
   useEffect(() => {
     const loadAuthState = async () => {
@@ -175,28 +146,91 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
   }, []);
 
-  const [googleAuthSuccess, setGoogleAuthSuccess] = useState(false);
-
-  useEffect(() => {
-    const handleResponse = async () => {
-      if (response?.type === 'success') {
-        const { authentication } = response;
-        if (authentication?.accessToken) {
-          setIsGoogleLoading(true);
-          const success = await processGoogleAuth(authentication.accessToken);
-          setIsGoogleLoading(false);
-          if (success) {
-            setGoogleAuthSuccess(true);
-          }
-        }
-      } else if (response?.type === 'error' || response?.type === 'dismiss') {
-        console.log('❌ Google Sign-In cancelled or failed:', response.type);
-        setIsGoogleLoading(false);
+  const loginWithGoogleWeb = useCallback(async (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      const GOOGLE_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
+      
+      const width = 500;
+      const height = 600;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+      
+      const redirectUri = window.location.origin;
+      const scope = 'openid email profile';
+      const responseType = 'token';
+      
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${GOOGLE_CLIENT_ID}&` +
+        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+        `response_type=${responseType}&` +
+        `scope=${encodeURIComponent(scope)}&` +
+        `prompt=select_account`;
+      
+      console.log('🔐 Opening Google auth popup...');
+      console.log('🔗 Redirect URI:', redirectUri);
+      
+      const popup = window.open(
+        authUrl,
+        'Google Sign In',
+        `width=${width},height=${height},left=${left},top=${top},popup=yes`
+      );
+      
+      if (!popup) {
+        console.error('❌ Popup blocked');
+        resolve(false);
+        return;
       }
-    };
-    
-    handleResponse();
-  }, [response, processGoogleAuth]);
+      
+      const checkInterval = setInterval(async () => {
+        try {
+          if (popup.closed) {
+            console.log('❌ Popup closed by user');
+            clearInterval(checkInterval);
+            setIsGoogleLoading(false);
+            resolve(false);
+            return;
+          }
+          
+          const popupUrl = popup.location.href;
+          
+          if (popupUrl.startsWith(redirectUri)) {
+            clearInterval(checkInterval);
+            
+            const hash = popup.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            const accessToken = params.get('access_token');
+            
+            popup.close();
+            
+            if (accessToken) {
+              console.log('✅ Got access token from popup');
+              const success = await processGoogleAuth(accessToken);
+              if (success) {
+                setGoogleAuthSuccess(true);
+              }
+              setIsGoogleLoading(false);
+              resolve(success);
+            } else {
+              console.log('❌ No access token in response');
+              setIsGoogleLoading(false);
+              resolve(false);
+            }
+          }
+        } catch {
+          // Cross-origin error - popup is still on Google's domain, keep waiting
+        }
+      }, 500);
+      
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        if (!popup.closed) {
+          popup.close();
+        }
+        setIsGoogleLoading(false);
+        resolve(false);
+      }, 120000);
+    });
+  }, [processGoogleAuth]);
 
   const loginWithGoogle = useCallback(async (): Promise<boolean> => {
     try {
@@ -204,27 +238,19 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       setIsGoogleLoading(true);
       setGoogleAuthSuccess(false);
       
-      const result = await promptAsync();
-      
-      if (result?.type === 'success') {
-        const { authentication } = result;
-        
-        if (authentication?.accessToken) {
-          const success = await processGoogleAuth(authentication.accessToken);
-          setIsGoogleLoading(false);
-          return success;
-        }
+      if (Platform.OS === 'web') {
+        return await loginWithGoogleWeb();
+      } else {
+        console.log('❌ Google Sign-In not supported on this platform in development');
+        setIsGoogleLoading(false);
+        return false;
       }
-      
-      console.log('❌ Google Sign-In cancelled or failed');
-      setIsGoogleLoading(false);
-      return false;
     } catch (error) {
       console.error('❌ Google Sign-In error:', error);
       setIsGoogleLoading(false);
       return false;
     }
-  }, [promptAsync, processGoogleAuth]);
+  }, [loginWithGoogleWeb]);
 
   const register = useCallback(async (username: string, password: string, email: string = '', fullName: string = ''): Promise<boolean> => {
     try {
@@ -310,6 +336,6 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     logout,
     selectEvent,
     clearCurrentEvent,
-    googleAuthRequest: request,
+    googleAuthRequest: Platform.OS === 'web' ? {} : null,
   };
 });

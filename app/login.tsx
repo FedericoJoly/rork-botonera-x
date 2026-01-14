@@ -16,7 +16,7 @@ import { useAuth } from '@/hooks/auth-store';
 import Colors from '@/constants/colors';
 
 export default function LoginScreen() {
-  const { login, loginWithGoogle, isGoogleLoading, googleAuthRequest, googleAuthSuccess, isAuthenticated } = useAuth();
+  const { login, loginWithGoogle, isGoogleLoading, googleAuthSuccess, isAuthenticated } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -158,9 +158,9 @@ export default function LoginScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.button, styles.googleButton, (!googleAuthRequest || isGoogleLoading) && styles.buttonDisabled]}
+              style={[styles.button, styles.googleButton, isGoogleLoading && styles.buttonDisabled]}
               onPress={handleGoogleLogin}
-              disabled={!googleAuthRequest || isLoading || isGoogleLoading}
+              disabled={isLoading || isGoogleLoading}
             >
               <Chrome size={20} color="#fff" />
               <Text style={styles.buttonText}>
