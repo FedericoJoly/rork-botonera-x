@@ -4,6 +4,7 @@ import { databaseService } from './database';
 import { User, Event } from '@/types/auth';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri } from 'expo-auth-session';
 
 
 WebBrowser.maybeCompleteAuthSession();
@@ -12,9 +13,13 @@ const GOOGLE_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.goo
 const GOOGLE_IOS_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
 const GOOGLE_ANDROID_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
 
-console.log('🔗 Google Cloud Console configuration:');
-console.log('   JavaScript Origins: https://auth.expo.io');
-console.log('   Redirect URIs: https://auth.expo.io/@anonymous/botoneraX');
+const redirectUri = makeRedirectUri({
+  scheme: 'botoneraX',
+  path: 'auth',
+});
+
+console.log('🔗 Google OAuth redirect URI:', redirectUri);
+console.log('🔗 Add this to Google Cloud Console Authorized redirect URIs');
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -27,7 +32,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     clientId: GOOGLE_CLIENT_ID,
     iosClientId: GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-    redirectUri: 'https://auth.expo.io/@anonymous/botoneraX',
+    webClientId: GOOGLE_CLIENT_ID,
+    redirectUri,
   });
 
   useEffect(() => {
