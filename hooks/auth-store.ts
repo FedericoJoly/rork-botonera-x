@@ -18,10 +18,12 @@ const redirectUri = makeRedirectUri({
   path: 'auth',
 });
 
-console.log('🔗 Google OAuth Redirect URI:', redirectUri);
-console.log('👆 Add this URI to Google Cloud Console:');
-console.log('   Authorized redirect URIs:', redirectUri);
-console.log('   Also add: https://auth.expo.io/@anonymous/botoneraX');
+// Stable proxy URI for Google Console
+const EXPO_PROXY_URI = 'https://auth.expo.io/@anonymous/botoneraX';
+
+console.log('🔗 Add BOTH URIs to Google Cloud Console:');
+console.log('   1. Expo Proxy (STABLE):', EXPO_PROXY_URI);
+console.log('   2. Local dev URI:', redirectUri);
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -34,7 +36,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     clientId: GOOGLE_CLIENT_ID,
     iosClientId: GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-    redirectUri,
+    redirectUri: EXPO_PROXY_URI,
   });
 
   useEffect(() => {
