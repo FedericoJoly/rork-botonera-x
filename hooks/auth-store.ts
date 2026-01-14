@@ -4,12 +4,20 @@ import { databaseService } from './database';
 import { User, Event } from '@/types/auth';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri } from 'expo-auth-session';
 
 WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
 const GOOGLE_IOS_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
 const GOOGLE_ANDROID_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
+
+const redirectUri = makeRedirectUri({
+  scheme: 'myapp',
+});
+
+console.log('🔗 Google OAuth Redirect URI:', redirectUri);
+console.log('👆 Add this URI to your Google Cloud Console > OAuth 2.0 Client > Authorized redirect URIs');
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -22,6 +30,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     clientId: GOOGLE_CLIENT_ID,
     iosClientId: GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+    redirectUri,
   });
 
   useEffect(() => {
