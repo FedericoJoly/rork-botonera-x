@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { useAuth } from '@/hooks/auth-store';
 import Colors from '@/constants/colors';
 
 export default function LoginScreen() {
-  const { login, loginWithGoogle, isGoogleLoading, googleAuthRequest } = useAuth();
+  const { login, loginWithGoogle, isGoogleLoading, googleAuthRequest, googleAuthSuccess, isAuthenticated } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -64,6 +64,13 @@ export default function LoginScreen() {
   const handleForgotPassword = () => {
     router.push('/forgot-password');
   };
+
+  useEffect(() => {
+    if (googleAuthSuccess && isAuthenticated) {
+      console.log('✅ Google auth success detected, navigating to event-manager');
+      router.replace('/event-manager');
+    }
+  }, [googleAuthSuccess, isAuthenticated]);
 
   const handleGoogleLogin = async () => {
     console.log('🔐 Google login button pressed');

@@ -33,7 +33,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  const [request, , promptAsync] = Google.useAuthRequest({
+  const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: GOOGLE_CLIENT_ID,
     iosClientId: GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
@@ -136,10 +136,72 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
   }, [hashPassword]);
 
+  const processGoogleAuth = useCallback(async (accessToken: string): Promise<boolean> => {
+    try {
+      console.log('🔍 Fetching Google user info...');
+      const userInfoResponse = await fetch(
+        'https://www.googleapis.com/userinfo/v2/me',
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+      
+      const googleUser = await userInfoResponse.json();
+      console.log('📧 Google user:', googleUser.email);
+      
+      let user = await databaseService.getUserByEmail(googleUser.email);
+      
+      if (!user) {
+        console.log('📝 Creating new user from Google account...');
+        user = await databaseService.createUserFromGoogle(
+          googleUser.id,
+          googleUser.email,
+          googleUser.name || googleUser.email.split('@')[0],
+          googleUser.picture
+        );
+      } else {
+        console.log('✅ Found existing user:', user.username);
+      }
+      
+      setCurrentUser(user);
+      setIsAuthenticated(true);
+      await databaseService.saveCurrentUser(user.id);
+      console.log('✅ Google Sign-In successful');
+      return true;
+    } catch (error) {
+      console.error('❌ Error processing Google auth:', error);
+      return false;
+    }
+  }, []);
+
+  const [googleAuthSuccess, setGoogleAuthSuccess] = useState(false);
+
+  useEffect(() => {
+    const handleResponse = async () => {
+      if (response?.type === 'success') {
+        const { authentication } = response;
+        if (authentication?.accessToken) {
+          setIsGoogleLoading(true);
+          const success = await processGoogleAuth(authentication.accessToken);
+          setIsGoogleLoading(false);
+          if (success) {
+            setGoogleAuthSuccess(true);
+          }
+        }
+      } else if (response?.type === 'error' || response?.type === 'dismiss') {
+        console.log('❌ Google Sign-In cancelled or failed:', response.type);
+        setIsGoogleLoading(false);
+      }
+    };
+    
+    handleResponse();
+  }, [response, processGoogleAuth]);
+
   const loginWithGoogle = useCallback(async (): Promise<boolean> => {
     try {
       console.log('🔐 Starting Google Sign-In...');
       setIsGoogleLoading(true);
+      setGoogleAuthSuccess(false);
       
       const result = await promptAsync();
       
@@ -147,37 +209,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         const { authentication } = result;
         
         if (authentication?.accessToken) {
-          console.log('🔍 Fetching Google user info...');
-          const userInfoResponse = await fetch(
-            'https://www.googleapis.com/userinfo/v2/me',
-            {
-              headers: { Authorization: `Bearer ${authentication.accessToken}` },
-            }
-          );
-          
-          const googleUser = await userInfoResponse.json();
-          console.log('📧 Google user:', googleUser.email);
-          
-          let user = await databaseService.getUserByEmail(googleUser.email);
-          
-          if (!user) {
-            console.log('📝 Creating new user from Google account...');
-            user = await databaseService.createUserFromGoogle(
-              googleUser.id,
-              googleUser.email,
-              googleUser.name || googleUser.email.split('@')[0],
-              googleUser.picture
-            );
-          } else {
-            console.log('✅ Found existing user:', user.username);
-          }
-          
-          setCurrentUser(user);
-          setIsAuthenticated(true);
-          await databaseService.saveCurrentUser(user.id);
-          console.log('✅ Google Sign-In successful');
+          const success = await processGoogleAuth(authentication.accessToken);
           setIsGoogleLoading(false);
-          return true;
+          return success;
         }
       }
       
@@ -189,7 +223,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       setIsGoogleLoading(false);
       return false;
     }
-  }, [promptAsync]);
+  }, [promptAsync, processGoogleAuth]);
 
   const register = useCallback(async (username: string, password: string, email: string = '', fullName: string = ''): Promise<boolean> => {
     try {
@@ -268,6 +302,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     isLoading,
     isAuthenticated,
     isGoogleLoading,
+    googleAuthSuccess,
     login,
     loginWithGoogle,
     register,
