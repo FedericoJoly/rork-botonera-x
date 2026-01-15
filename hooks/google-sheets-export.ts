@@ -3,10 +3,6 @@ import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import * as XLSX from 'xlsx';
-import * as AuthSession from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
-
-WebBrowser.maybeCompleteAuthSession();
 
 interface ExportData {
   userName: string;
@@ -166,40 +162,6 @@ function generateCurrenciesData(data: ExportData): (string | number)[][] {
   });
 
   return rows;
-}
-
-const GOOGLE_CLIENT_ID = '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com';
-const IOS_SCHEME = 'com.googleusercontent.apps.364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov';
-
-const discovery = {
-  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-  tokenEndpoint: 'https://oauth2.googleapis.com/token',
-  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
-};
-
-export function useGoogleAuth() {
-  const redirectUri = Platform.select({
-    ios: `${IOS_SCHEME}:/oauth2redirect/google`,
-    android: `${IOS_SCHEME}:/oauth2redirect/google`,
-    default: AuthSession.makeRedirectUri(),
-  });
-  
-  console.log('📱 Google Auth redirect URI:', redirectUri);
-
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: GOOGLE_CLIENT_ID,
-      scopes: [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive.file',
-      ],
-      redirectUri,
-      responseType: AuthSession.ResponseType.Token,
-    },
-    discovery
-  );
-
-  return { request, response, promptAsync, redirectUri };
 }
 
 export async function exportToGoogleSheets(

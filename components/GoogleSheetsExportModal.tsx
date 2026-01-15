@@ -15,14 +15,14 @@ import {
 import { X, FolderOpen, ExternalLink, Check, FileSpreadsheet, AlertCircle, LogIn } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
-import * as AuthSession from 'expo-auth-session';
+import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { exportToGoogleSheets } from '@/hooks/google-sheets-export';
 import { Transaction, Product, AppSettings, ExchangeRates } from '@/types/sales';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const GOOGLE_CLIENT_ID = '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com';
+const IOS_CLIENT_ID = '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com';
 
 interface Props {
   visible: boolean;
@@ -52,6 +52,15 @@ export default function GoogleSheetsExportModal({ visible, onClose, exportData }
     error?: string;
     spreadsheetUrl?: string;
   } | null>(null);
+
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    iosClientId: IOS_CLIENT_ID,
+    scopes: [
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/userinfo.email',
+    ],
+  });
 
   const fetchUserInfo = async (token: string) => {
     try {
@@ -99,6 +108,25 @@ export default function GoogleSheetsExportModal({ visible, onClose, exportData }
     }
   }, [visible]);
 
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const token = response.authentication?.accessToken;
+      if (token) {
+        console.log('✅ Got access token from Google');
+        setAccessToken(token);
+        AsyncStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+        fetchUserInfo(token);
+      }
+      setIsAuthenticating(false);
+    } else if (response?.type === 'error') {
+      console.error('❌ Auth error:', response.error);
+      setResult({ success: false, error: response.error?.message || 'Authentication failed' });
+      setIsAuthenticating(false);
+    } else if (response?.type === 'dismiss' || response?.type === 'cancel') {
+      setIsAuthenticating(false);
+    }
+  }, [response]);
+
   const loadSavedFolderLink = async () => {
     try {
       const saved = await AsyncStorage.getItem(FOLDER_LINK_STORAGE_KEY);
@@ -118,53 +146,15 @@ export default function GoogleSheetsExportModal({ visible, onClose, exportData }
     }
   };
 
-  const redirectUri = AuthSession.makeRedirectUri();
-  
   const handleSignIn = async () => {
     setIsAuthenticating(true);
     setResult(null);
     try {
-      const scopes = [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive.file',
-        'https://www.googleapis.com/auth/userinfo.email',
-      ].join(' ');
-      
-      console.log('📱 Redirect URI:', redirectUri);
-      
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&response_type=token` +
-        `&scope=${encodeURIComponent(scopes)}` +
-        `&prompt=consent`;
-      
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
-      
-      if (result.type === 'success' && result.url) {
-        console.log('✅ Auth callback URL:', result.url);
-        // Extract access token from URL fragment
-        const urlParts = result.url.split('#');
-        if (urlParts.length > 1) {
-          const params = new URLSearchParams(urlParts[1]);
-          const token = params.get('access_token');
-          if (token) {
-            console.log('✅ Got access token');
-            setAccessToken(token);
-            await AsyncStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
-            fetchUserInfo(token);
-          } else {
-            const error = params.get('error');
-            setResult({ success: false, error: error || 'No access token received' });
-          }
-        }
-      } else if (result.type === 'cancel' || result.type === 'dismiss') {
-        console.log('🚫 Auth cancelled');
-      }
+      console.log('📱 Starting Google Sign-In with iOS client...');
+      await promptAsync();
     } catch (error: any) {
       console.error('Sign in error:', error);
       setResult({ success: false, error: 'Failed to start authentication: ' + error.message });
-    } finally {
       setIsAuthenticating(false);
     }
   };
@@ -250,18 +240,10 @@ export default function GoogleSheetsExportModal({ visible, onClose, exportData }
                   </Text>
                 </View>
 
-                <View style={styles.uriBox}>
-                  <Text style={styles.uriLabel}>Add this URI to Google Cloud Console:</Text>
-                  <Text style={styles.uriText} selectable>{redirectUri}</Text>
-                  <Text style={styles.uriHelper}>
-                    Go to APIs & Services → Credentials → Your Web OAuth Client → Authorized redirect URIs
-                  </Text>
-                </View>
-
                 <TouchableOpacity
-                  style={[styles.signInButton, isAuthenticating && styles.buttonDisabled]}
+                  style={[styles.signInButton, (isAuthenticating || !request) && styles.buttonDisabled]}
                   onPress={handleSignIn}
-                  disabled={isAuthenticating}
+                  disabled={isAuthenticating || !request}
                 >
                   {isAuthenticating ? (
                     <ActivityIndicator color="white" />
@@ -567,32 +549,7 @@ const styles = StyleSheet.create({
     color: '#1a73e8',
     fontWeight: '500',
   },
-  uriBox: {
-    backgroundColor: '#fff3cd',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  uriLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#856404',
-    marginBottom: 8,
-  },
-  uriText: {
-    fontSize: 12,
-    color: '#333',
-    backgroundColor: '#fff',
-    padding: 10,
-    borderRadius: 6,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    marginBottom: 8,
-  },
-  uriHelper: {
-    fontSize: 11,
-    color: '#856404',
-    lineHeight: 16,
-  },
+
   exportButton: {
     flexDirection: 'row',
     alignItems: 'center',
