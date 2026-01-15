@@ -27,7 +27,7 @@ import { CURRENCIES } from '@/constants/products';
 import Colors from '@/constants/colors';
 import { useNavigationBlocker } from '@/hooks/navigation-blocker';
 import { useAuth } from '@/hooks/auth-store';
-import { createAndExportSpreadsheet } from '@/hooks/google-sheets-export';
+import GoogleSheetsExportModal from '@/components/GoogleSheetsExportModal';
 import { databaseService } from '@/hooks/database';
 
 
@@ -154,8 +154,8 @@ export default function SetupScreen() {
       checkLockStatus();
     }, [checkLockStatus])
   );
-  const [isExporting, setIsExporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showGoogleSheetsModal, setShowGoogleSheetsModal] = useState(false);
   const [exportFileName, setExportFileName] = useState('');
 
   const [newProduct, setNewProduct] = useState({
@@ -530,7 +530,7 @@ export default function SetupScreen() {
     }
   };
 
-  const handleExportToSpreadsheet = async () => {
+  const handleExportToGoogleSheets = () => {
     if (!currentUser || !currentEvent) {
       Alert.alert('Error', 'No event loaded');
       return;
@@ -541,35 +541,7 @@ export default function SetupScreen() {
       return;
     }
 
-    try {
-      setIsExporting(true);
-      console.log('📊 Starting spreadsheet export...');
-      
-      const result = await createAndExportSpreadsheet({
-        userName: currentUser.username,
-        eventName: settings.eventName,
-        transactions,
-        products,
-        settings,
-        exchangeRates: {
-          USD: exchangeRates?.USD || 1,
-          EUR: exchangeRates?.EUR || 0.92,
-          GBP: exchangeRates?.GBP || 0.79,
-          lastUpdated: exchangeRates?.lastUpdated || new Date(),
-        },
-      });
-
-      if (result.success) {
-        console.log('✅ Export complete');
-      } else {
-        Alert.alert('Error', result.error || 'Failed to export data');
-      }
-    } catch (error) {
-      console.error('❌ Export error:', error);
-      Alert.alert('Error', 'An unexpected error occurred during export');
-    } finally {
-      setIsExporting(false);
-    }
+    setShowGoogleSheetsModal(true);
   };
 
   const handleExportEvent = () => {
@@ -1103,12 +1075,11 @@ export default function SetupScreen() {
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={styles.exportButton}
-            onPress={handleExportToSpreadsheet}
-            disabled={isExporting}
-            testID="export-spreadsheet-button"
+            onPress={handleExportToGoogleSheets}
+            testID="export-gsheet-button"
           >
             <FileSpreadsheet size={20} color="white" />
-            <Text style={styles.exportButtonText}>{isExporting ? 'Exporting...' : 'CSV'}</Text>
+            <Text style={styles.exportButtonText}>GSheet</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -1695,9 +1666,25 @@ export default function SetupScreen() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
-      
 
-
+      {/* Google Sheets Export Modal */}
+      <GoogleSheetsExportModal
+        visible={showGoogleSheetsModal}
+        onClose={() => setShowGoogleSheetsModal(false)}
+        exportData={{
+          userName: currentUser?.username || 'User',
+          eventName: settings.eventName,
+          transactions,
+          products,
+          settings,
+          exchangeRates: {
+            USD: exchangeRates?.USD || 1,
+            EUR: exchangeRates?.EUR || 0.92,
+            GBP: exchangeRates?.GBP || 0.79,
+            lastUpdated: exchangeRates?.lastUpdated || new Date(),
+          },
+        }}
+      />
     </SafeAreaView>
   );
 }

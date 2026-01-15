@@ -3,6 +3,10 @@ import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import * as XLSX from 'xlsx';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+
+WebBrowser.maybeCompleteAuthSession();
 
 interface ExportData {
   userName: string;
@@ -23,6 +27,7 @@ function getRate(exchangeRates: ExchangeRates, currency: string): number {
 interface GoogleSheetsExportOptions {
   folderId?: string;
   folderLink?: string;
+  accessToken: string;
 }
 
 function extractFolderIdFromLink(link: string): string | null {
@@ -163,107 +168,50 @@ function generateCurrenciesData(data: ExportData): (string | number)[][] {
   return rows;
 }
 
-async function getAccessToken(serviceAccountJson: string): Promise<string> {
-  console.log('🔑 Getting access token from service account...');
+const GOOGLE_CLIENT_ID = '407408718192.apps.googleusercontent.com';
+
+const discovery = {
+  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+  tokenEndpoint: 'https://oauth2.googleapis.com/token',
+  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
+};
+
+export function useGoogleAuth() {
+  const redirectUri = AuthSession.makeRedirectUri({
+    scheme: 'exp',
+  });
   
-  try {
-    const serviceAccount = JSON.parse(serviceAccountJson);
-    
-    const header = {
-      alg: 'RS256',
-      typ: 'JWT',
-    };
-    
-    const now = Math.floor(Date.now() / 1000);
-    const claim = {
-      iss: serviceAccount.client_email,
-      scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',
-      aud: 'https://oauth2.googleapis.com/token',
-      exp: now + 3600,
-      iat: now,
-    };
-    
-    const base64UrlEncode = (obj: object) => {
-      const json = JSON.stringify(obj);
-      const base64 = btoa(json);
-      return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    };
-    
-    const headerEncoded = base64UrlEncode(header);
-    const claimEncoded = base64UrlEncode(claim);
-    const signatureInput = `${headerEncoded}.${claimEncoded}`;
-    
-    const pemContents = serviceAccount.private_key
-      .replace(/-----BEGIN PRIVATE KEY-----/g, '')
-      .replace(/-----END PRIVATE KEY-----/g, '')
-      .replace(/\n/g, '');
-    
-    const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
-    
-    const cryptoKey = await crypto.subtle.importKey(
-      'pkcs8',
-      binaryKey,
-      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-    
-    const signatureBuffer = await crypto.subtle.sign(
-      'RSASSA-PKCS1-v1_5',
-      cryptoKey,
-      new TextEncoder().encode(signatureInput)
-    );
-    
-    const signature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-    
-    const jwt = `${signatureInput}.${signature}`;
-    
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
-    });
-    
-    if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text();
-      console.error('❌ Token exchange failed:', errorText);
-      throw new Error(`Token exchange failed: ${errorText}`);
-    }
-    
-    const tokenData = await tokenResponse.json();
-    console.log('✅ Got access token');
-    return tokenData.access_token;
-  } catch (error: any) {
-    console.error('❌ Error getting access token:', error);
-    throw new Error(`Failed to get access token: ${error.message}`);
-  }
+  console.log('📱 Google Auth redirect URI:', redirectUri);
+
+  const [request, response, promptAsync] = AuthSession.useAuthRequest(
+    {
+      clientId: GOOGLE_CLIENT_ID,
+      scopes: [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive.file',
+      ],
+      redirectUri,
+      responseType: AuthSession.ResponseType.Token,
+    },
+    discovery
+  );
+
+  return { request, response, promptAsync, redirectUri };
 }
 
 export async function exportToGoogleSheets(
   data: ExportData,
   options: GoogleSheetsExportOptions
-): Promise<{ success: boolean; error?: string; spreadsheetUrl?: string; serviceAccountEmail?: string }> {
-  console.log('📊 Starting Google Sheets export...');
+): Promise<{ success: boolean; error?: string; spreadsheetUrl?: string }> {
+  console.log('📊 Starting Google Sheets export with OAuth...');
   
-  const serviceAccountJson = process.env.EXPO_PUBLIC_GOOGLE_SERVICE_ACCOUNT;
-  if (!serviceAccountJson) {
+  const { accessToken } = options;
+  
+  if (!accessToken) {
     return { 
       success: false, 
-      error: 'Google service account not configured. Please add EXPO_PUBLIC_GOOGLE_SERVICE_ACCOUNT environment variable.' 
+      error: 'Not authenticated. Please sign in with Google first.' 
     };
-  }
-  
-  let serviceAccountEmail = '';
-  try {
-    const sa = JSON.parse(serviceAccountJson);
-    serviceAccountEmail = sa.client_email || '';
-  } catch {
-    console.error('Failed to parse service account JSON');
   }
   
   let folderId = options.folderId;
@@ -271,17 +219,7 @@ export async function exportToGoogleSheets(
     folderId = extractFolderIdFromLink(options.folderLink) || undefined;
   }
   
-  if (!folderId) {
-    return { 
-      success: false, 
-      error: 'Please provide a valid Google Drive folder link.',
-      serviceAccountEmail 
-    };
-  }
-  
   try {
-    const accessToken = await getAccessToken(serviceAccountJson);
-    
     const timestamp = new Date().toISOString().split('T')[0];
     const safeName = data.eventName.replace(/[^a-z0-9]/gi, '_');
     const spreadsheetTitle = `${safeName}_${timestamp}`;
@@ -360,43 +298,38 @@ export async function exportToGoogleSheets(
     const spreadsheetUrl = spreadsheet.spreadsheetUrl;
     
     console.log('✅ Spreadsheet created:', spreadsheetId);
-    console.log('📁 Moving to folder:', folderId);
     
-    const moveResponse = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${spreadsheetId}?addParents=${folderId}&fields=id,parents`,
-      {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
+    if (folderId) {
+      console.log('📁 Moving to folder:', folderId);
+      
+      const moveResponse = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${spreadsheetId}?addParents=${folderId}&fields=id,parents`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      
+      if (!moveResponse.ok) {
+        const errorText = await moveResponse.text();
+        console.error('⚠️ Failed to move spreadsheet to folder:', errorText);
+      } else {
+        console.log('✅ Spreadsheet moved to folder successfully');
       }
-    );
-    
-    if (!moveResponse.ok) {
-      const errorText = await moveResponse.text();
-      console.error('❌ Failed to move spreadsheet to folder:', errorText);
-      return {
-        success: false,
-        error: `Spreadsheet created but could not move to folder. Make sure you've shared the folder with: ${serviceAccountEmail}`,
-        spreadsheetUrl,
-        serviceAccountEmail,
-      };
     }
-    
-    console.log('✅ Spreadsheet moved to folder successfully');
     
     return { 
       success: true, 
       spreadsheetUrl,
-      serviceAccountEmail 
     };
   } catch (error: any) {
     console.error('❌ Error exporting to Google Sheets:', error);
     return { 
       success: false, 
       error: error.message || String(error),
-      serviceAccountEmail 
     };
   }
 }
@@ -495,17 +428,5 @@ export async function createAndExportSpreadsheet(
   } catch (error: any) {
     console.error('❌ Error creating spreadsheet:', error);
     return { success: false, error: error.message || String(error) };
-  }
-}
-
-export function getServiceAccountEmail(): string | null {
-  const serviceAccountJson = process.env.EXPO_PUBLIC_GOOGLE_SERVICE_ACCOUNT;
-  if (!serviceAccountJson) return null;
-  
-  try {
-    const sa = JSON.parse(serviceAccountJson);
-    return sa.client_email || null;
-  } catch {
-    return null;
   }
 }
