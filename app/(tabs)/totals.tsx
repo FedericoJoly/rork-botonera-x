@@ -373,7 +373,7 @@ export default function TotalsScreen() {
           onPress={() => setShowExportModal(true)}
         >
           <FileSpreadsheet size={18} color="white" />
-          <Text style={dynamicStyles.exportButtonText}>Export</Text>
+          <Text style={dynamicStyles.exportButtonText}>Sheets</Text>
         </TouchableOpacity>
         {typeSubtotals.length > 0 ? (
           <>
