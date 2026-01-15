@@ -15,14 +15,20 @@ import {
 import { X, FolderOpen, ExternalLink, Check, FileSpreadsheet, AlertCircle, LogIn } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
-import * as Google from 'expo-auth-session/providers/google';
+import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { exportToGoogleSheets } from '@/hooks/google-sheets-export';
 import { Transaction, Product, AppSettings, ExchangeRates } from '@/types/sales';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const IOS_CLIENT_ID = '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com';
+const WEB_CLIENT_ID = '364250874736-YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
+
+const discovery = {
+  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+  tokenEndpoint: 'https://oauth2.googleapis.com/token',
+  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
+};
 
 interface Props {
   visible: boolean;
@@ -53,14 +59,11 @@ function GoogleSheetsExportModalContent({ visible, onClose, exportData }: Props)
     spreadsheetUrl?: string;
   } | null>(null);
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    iosClientId: IOS_CLIENT_ID,
-    scopes: [
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive.file',
-      'https://www.googleapis.com/auth/userinfo.email',
-    ],
+  const redirectUri = AuthSession.makeRedirectUri({
+    preferLocalhost: false,
   });
+
+  console.log('📱 Redirect URI:', redirectUri);
 
   const fetchUserInfo = async (token: string) => {
     try {
@@ -108,24 +111,7 @@ function GoogleSheetsExportModalContent({ visible, onClose, exportData }: Props)
     }
   }, [visible]);
 
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const token = response.authentication?.accessToken;
-      if (token) {
-        console.log('✅ Got access token from Google');
-        setAccessToken(token);
-        AsyncStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
-        fetchUserInfo(token);
-      }
-      setIsAuthenticating(false);
-    } else if (response?.type === 'error') {
-      console.error('❌ Auth error:', response.error);
-      setResult({ success: false, error: response.error?.message || 'Authentication failed' });
-      setIsAuthenticating(false);
-    } else if (response?.type === 'dismiss' || response?.type === 'cancel') {
-      setIsAuthenticating(false);
-    }
-  }, [response]);
+  
 
   const loadSavedFolderLink = async () => {
     try {
@@ -150,11 +136,43 @@ function GoogleSheetsExportModalContent({ visible, onClose, exportData }: Props)
     setIsAuthenticating(true);
     setResult(null);
     try {
-      console.log('📱 Starting Google Sign-In with iOS client...');
-      await promptAsync();
+      console.log('📱 Starting Google Sign-In...');
+      console.log('📱 Using redirect URI:', redirectUri);
+      
+      const authRequestOptions: AuthSession.AuthRequestConfig = {
+        clientId: WEB_CLIENT_ID,
+        redirectUri,
+        scopes: [
+          'https://www.googleapis.com/auth/spreadsheets',
+          'https://www.googleapis.com/auth/drive.file',
+          'https://www.googleapis.com/auth/userinfo.email',
+        ],
+        responseType: AuthSession.ResponseType.Token,
+        usePKCE: false,
+      };
+      
+      const authRequest = new AuthSession.AuthRequest(authRequestOptions);
+      
+      const response = await authRequest.promptAsync(discovery);
+      
+      console.log('📱 Auth response type:', response.type);
+      
+      if (response.type === 'success' && response.params?.access_token) {
+        const token = response.params.access_token;
+        console.log('✅ Got access token from Google');
+        setAccessToken(token);
+        AsyncStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+        fetchUserInfo(token);
+      } else if (response.type === 'error') {
+        console.error('❌ Auth error:', response.params);
+        setResult({ success: false, error: response.params?.error_description || response.params?.error || 'Authentication failed' });
+      } else if (response.type === 'dismiss' || response.type === 'cancel') {
+        console.log('📱 Auth cancelled/dismissed');
+      }
     } catch (error: any) {
       console.error('Sign in error:', error);
-      setResult({ success: false, error: 'Failed to start authentication: ' + error.message });
+      setResult({ success: false, error: 'Failed to authenticate: ' + error.message });
+    } finally {
       setIsAuthenticating(false);
     }
   };
@@ -238,12 +256,14 @@ function GoogleSheetsExportModalContent({ visible, onClose, exportData }: Props)
                   <Text style={styles.instructionText}>
                     Sign in with your Google account to export your sales data directly to Google Sheets in your own Drive.
                   </Text>
+                  <Text style={styles.redirectUriLabel}>Required redirect URI:</Text>
+                  <Text style={styles.redirectUriText} selectable>{redirectUri}</Text>
                 </View>
 
                 <TouchableOpacity
-                  style={[styles.signInButton, (isAuthenticating || !request) && styles.buttonDisabled]}
+                  style={[styles.signInButton, isAuthenticating && styles.buttonDisabled]}
                   onPress={handleSignIn}
-                  disabled={isAuthenticating || !request}
+                  disabled={isAuthenticating}
                 >
                   {isAuthenticating ? (
                     <ActivityIndicator color="white" />
@@ -458,6 +478,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     lineHeight: 20,
+  },
+  redirectUriLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 12,
+    fontWeight: '500' as const,
+  },
+  redirectUriText: {
+    fontSize: 11,
+    color: '#1a73e8',
+    backgroundColor: '#f0f4f8',
+    padding: 8,
+    borderRadius: 4,
+    marginTop: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   signInButton: {
     flexDirection: 'row',
