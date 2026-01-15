@@ -22,6 +22,8 @@ import { Transaction, Product, AppSettings, ExchangeRates } from '@/types/sales'
 
 WebBrowser.maybeCompleteAuthSession();
 
+const GOOGLE_CLIENT_ID = '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com';
+
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -116,30 +118,22 @@ export default function GoogleSheetsExportModal({ visible, onClose, exportData }
     }
   };
 
+  const redirectUri = AuthSession.makeRedirectUri();
+  
   const handleSignIn = async () => {
     setIsAuthenticating(true);
     setResult(null);
     try {
-      // Use Google's OAuth 2.0 playground-style implicit flow
-      const clientId = '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com';
       const scopes = [
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive.file',
         'https://www.googleapis.com/auth/userinfo.email',
       ].join(' ');
       
-      // For iOS OAuth, use reverse client ID as the scheme
-      const iosScheme = 'com.googleusercontent.apps.364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov';
-      const redirectUri = Platform.select({
-        ios: `${iosScheme}:/oauth2redirect/google`,
-        android: `${iosScheme}:/oauth2redirect/google`,
-        default: AuthSession.makeRedirectUri(),
-      });
-      
       console.log('📱 Redirect URI:', redirectUri);
       
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${encodeURIComponent(clientId)}` +
+        `client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}` +
         `&redirect_uri=${encodeURIComponent(redirectUri)}` +
         `&response_type=token` +
         `&scope=${encodeURIComponent(scopes)}` +
@@ -253,6 +247,14 @@ export default function GoogleSheetsExportModal({ visible, onClose, exportData }
                   <Text style={styles.instructionTitle}>Sign in with Google</Text>
                   <Text style={styles.instructionText}>
                     Sign in with your Google account to export your sales data directly to Google Sheets in your own Drive.
+                  </Text>
+                </View>
+
+                <View style={styles.uriBox}>
+                  <Text style={styles.uriLabel}>Add this URI to Google Cloud Console:</Text>
+                  <Text style={styles.uriText} selectable>{redirectUri}</Text>
+                  <Text style={styles.uriHelper}>
+                    Go to APIs & Services → Credentials → Your Web OAuth Client → Authorized redirect URIs
                   </Text>
                 </View>
 
@@ -564,6 +566,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1a73e8',
     fontWeight: '500',
+  },
+  uriBox: {
+    backgroundColor: '#fff3cd',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  uriLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#856404',
+    marginBottom: 8,
+  },
+  uriText: {
+    fontSize: 12,
+    color: '#333',
+    backgroundColor: '#fff',
+    padding: 10,
+    borderRadius: 6,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 8,
+  },
+  uriHelper: {
+    fontSize: 11,
+    color: '#856404',
+    lineHeight: 16,
   },
   exportButton: {
     flexDirection: 'row',
