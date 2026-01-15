@@ -23,7 +23,116 @@ function getRate(exchangeRates: ExchangeRates, currency: string): number {
 interface GoogleSheetsExportOptions {
   folderId?: string;
   folderLink?: string;
-  accessToken: string;
+  shareWithEmail?: string;
+}
+
+function base64UrlEncode(str: string): string {
+  const base64 = btoa(str);
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function createJWT(serviceAccount: { client_email: string; private_key: string }): Promise<string> {
+  const header = {
+    alg: 'RS256',
+    typ: 'JWT',
+  };
+
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: serviceAccount.client_email,
+    scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600,
+    iat: now,
+  };
+
+  const encodedHeader = base64UrlEncode(JSON.stringify(header));
+  const encodedPayload = base64UrlEncode(JSON.stringify(payload));
+  const signatureInput = `${encodedHeader}.${encodedPayload}`;
+
+  const privateKeyPem = serviceAccount.private_key;
+  const pemContents = privateKeyPem
+    .replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/\n/g, '');
+  
+  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8',
+    binaryKey,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const encoder = new TextEncoder();
+  const signatureBuffer = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    cryptoKey,
+    encoder.encode(signatureInput)
+  );
+
+  const signatureArray = new Uint8Array(signatureBuffer);
+  let binaryString = '';
+  for (let i = 0; i < signatureArray.length; i++) {
+    binaryString += String.fromCharCode(signatureArray[i]);
+  }
+  const signature = base64UrlEncode(binaryString);
+
+  return `${signatureInput}.${signature}`;
+}
+
+async function getServiceAccountAccessToken(): Promise<string> {
+  const serviceAccountJson = process.env.EXPO_PUBLIC_GOOGLE_SERVICE_ACCOUNT;
+  
+  if (!serviceAccountJson) {
+    throw new Error('Service account not configured. Please set EXPO_PUBLIC_GOOGLE_SERVICE_ACCOUNT environment variable.');
+  }
+
+  let serviceAccount;
+  try {
+    serviceAccount = JSON.parse(serviceAccountJson);
+  } catch {
+    throw new Error('Invalid service account JSON format');
+  }
+
+  if (!serviceAccount.client_email || !serviceAccount.private_key) {
+    throw new Error('Service account missing required fields (client_email, private_key)');
+  }
+
+  console.log('🔐 Creating JWT for service account:', serviceAccount.client_email);
+  
+  const jwt = await createJWT(serviceAccount);
+  
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+
+  if (!tokenResponse.ok) {
+    const errorText = await tokenResponse.text();
+    console.error('❌ Token exchange failed:', errorText);
+    throw new Error(`Failed to get access token: ${errorText}`);
+  }
+
+  const tokenData = await tokenResponse.json();
+  console.log('✅ Got access token from service account');
+  return tokenData.access_token;
+}
+
+export function getServiceAccountEmail(): string | null {
+  try {
+    const serviceAccountJson = process.env.EXPO_PUBLIC_GOOGLE_SERVICE_ACCOUNT;
+    if (!serviceAccountJson) return null;
+    const serviceAccount = JSON.parse(serviceAccountJson);
+    return serviceAccount.client_email || null;
+  } catch {
+    return null;
+  }
 }
 
 function extractFolderIdFromLink(link: string): string | null {
@@ -168,14 +277,15 @@ export async function exportToGoogleSheets(
   data: ExportData,
   options: GoogleSheetsExportOptions
 ): Promise<{ success: boolean; error?: string; spreadsheetUrl?: string }> {
-  console.log('📊 Starting Google Sheets export with OAuth...');
+  console.log('📊 Starting Google Sheets export with Service Account...');
   
-  const { accessToken } = options;
-  
-  if (!accessToken) {
-    return { 
-      success: false, 
-      error: 'Not authenticated. Please sign in with Google first.' 
+  let accessToken: string;
+  try {
+    accessToken = await getServiceAccountAccessToken();
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to authenticate with service account',
     };
   }
   
@@ -283,6 +393,33 @@ export async function exportToGoogleSheets(
         console.error('⚠️ Failed to move spreadsheet to folder:', errorText);
       } else {
         console.log('✅ Spreadsheet moved to folder successfully');
+      }
+    }
+
+    if (options.shareWithEmail) {
+      console.log('📤 Sharing spreadsheet with:', options.shareWithEmail);
+      
+      const shareResponse = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/permissions`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type: 'user',
+            role: 'writer',
+            emailAddress: options.shareWithEmail,
+          }),
+        }
+      );
+      
+      if (!shareResponse.ok) {
+        const errorText = await shareResponse.text();
+        console.error('⚠️ Failed to share spreadsheet:', errorText);
+      } else {
+        console.log('✅ Spreadsheet shared successfully');
       }
     }
     

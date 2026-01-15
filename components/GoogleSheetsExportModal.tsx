@@ -12,23 +12,11 @@ import {
   ScrollView,
   Pressable,
 } from 'react-native';
-import { X, FolderOpen, ExternalLink, Check, FileSpreadsheet, AlertCircle, LogIn } from 'lucide-react-native';
+import { X, FolderOpen, ExternalLink, Check, FileSpreadsheet, AlertCircle, Mail, Info } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
-import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
-import { exportToGoogleSheets } from '@/hooks/google-sheets-export';
+import { exportToGoogleSheets, getServiceAccountEmail } from '@/hooks/google-sheets-export';
 import { Transaction, Product, AppSettings, ExchangeRates } from '@/types/sales';
-
-WebBrowser.maybeCompleteAuthSession();
-
-const WEB_CLIENT_ID = '364250874736-d8jluj1cua2tu0ofpv884ao06vrl6her.apps.googleusercontent.com';
-
-const discovery = {
-  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-  tokenEndpoint: 'https://oauth2.googleapis.com/token',
-  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
-};
 
 interface Props {
   visible: boolean;
@@ -44,63 +32,33 @@ interface Props {
 }
 
 const FOLDER_LINK_STORAGE_KEY = 'google_drive_folder_link';
-const ACCESS_TOKEN_STORAGE_KEY = 'google_access_token';
-const USER_EMAIL_STORAGE_KEY = 'google_user_email';
+const USER_EMAIL_STORAGE_KEY = 'google_share_email';
 
 function GoogleSheetsExportModalContent({ visible, onClose, exportData }: Props) {
   const [folderLink, setFolderLink] = useState('');
+  const [shareEmail, setShareEmail] = useState('');
   const [isExporting, setIsExporting] = useState(false);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [result, setResult] = useState<{
     success: boolean;
     error?: string;
     spreadsheetUrl?: string;
   } | null>(null);
 
-  const fetchUserInfo = async (token: string) => {
-    try {
-      const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.email) {
-        setUserEmail(data.email);
-        await AsyncStorage.setItem(USER_EMAIL_STORAGE_KEY, data.email);
-        console.log('📧 User email:', data.email);
-      }
-    } catch (error) {
-      console.error('Failed to fetch user info:', error);
-    }
-  };
+  const serviceAccountEmail = getServiceAccountEmail();
 
-  const loadSavedAuth = async () => {
+  const loadSavedData = async () => {
     try {
-      const savedToken = await AsyncStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
       const savedEmail = await AsyncStorage.getItem(USER_EMAIL_STORAGE_KEY);
-      if (savedToken) {
-        // Verify token is still valid
-        const res = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + savedToken);
-        if (res.ok) {
-          setAccessToken(savedToken);
-          if (savedEmail) setUserEmail(savedEmail);
-          console.log('✅ Loaded saved Google auth');
-        } else {
-          // Token expired, clear it
-          await AsyncStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-          await AsyncStorage.removeItem(USER_EMAIL_STORAGE_KEY);
-        }
-      }
+      if (savedEmail) setShareEmail(savedEmail);
     } catch (error) {
-      console.log('Failed to load saved auth:', error);
+      console.log('Failed to load saved data:', error);
     }
   };
 
   useEffect(() => {
     if (visible) {
       loadSavedFolderLink();
-      loadSavedAuth();
+      loadSavedData();
       setResult(null);
     }
   }, [visible]);
@@ -126,69 +84,15 @@ function GoogleSheetsExportModalContent({ visible, onClose, exportData }: Props)
     }
   };
 
-  const redirectUri = AuthSession.makeRedirectUri();
-
-  const [, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: WEB_CLIENT_ID,
-      scopes: [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive.file', 
-        'https://www.googleapis.com/auth/userinfo.email',
-      ],
-      responseType: AuthSession.ResponseType.Token,
-      redirectUri,
-    },
-    discovery
-  );
-
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { access_token } = response.params;
-      if (access_token) {
-        console.log('✅ Got access token from Google');
-        setAccessToken(access_token);
-        AsyncStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, access_token);
-        fetchUserInfo(access_token);
-      }
-    } else if (response?.type === 'error') {
-      console.error('❌ Auth error:', response.params);
-      setResult({ 
-        success: false, 
-        error: response.params?.error_description || response.params?.error || 'Authentication failed' 
-      });
-    }
-  }, [response]);
-
-  const handleSignIn = async () => {
-    setIsAuthenticating(true);
-    setResult(null);
+  const saveShareEmail = async (email: string) => {
     try {
-      console.log('📱 Starting Google Sign-In...');
-      console.log('📱 Redirect URI:', redirectUri);
-      await promptAsync();
-    } catch (error: any) {
-      console.error('Sign in error:', error);
-      setResult({ success: false, error: 'Failed to authenticate: ' + error.message });
-    } finally {
-      setIsAuthenticating(false);
+      await AsyncStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
+    } catch (error) {
+      console.log('Failed to save share email:', error);
     }
-  };
-
-  const handleSignOut = async () => {
-    setAccessToken(null);
-    setUserEmail(null);
-    setResult(null);
-    await AsyncStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-    await AsyncStorage.removeItem(USER_EMAIL_STORAGE_KEY);
   };
 
   const handleExport = async () => {
-    if (!accessToken) {
-      setResult({ success: false, error: 'Please sign in with Google first' });
-      return;
-    }
-
     setIsExporting(true);
     setResult(null);
 
@@ -196,10 +100,13 @@ function GoogleSheetsExportModalContent({ visible, onClose, exportData }: Props)
       if (folderLink.trim()) {
         await saveFolderLink(folderLink.trim());
       }
+      if (shareEmail.trim()) {
+        await saveShareEmail(shareEmail.trim());
+      }
       
       const exportResult = await exportToGoogleSheets(exportData, {
         folderLink: folderLink.trim() || undefined,
-        accessToken,
+        shareWithEmail: shareEmail.trim() || undefined,
       });
 
       setResult(exportResult);
@@ -247,132 +154,119 @@ function GoogleSheetsExportModalContent({ visible, onClose, exportData }: Props)
           </View>
 
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-            {!accessToken ? (
-              <>
-                <View style={styles.instructionBox}>
-                  <Text style={styles.instructionTitle}>Sign in with Google</Text>
-                  <Text style={styles.instructionText}>
-                    Sign in with your Google account to export your sales data directly to Google Sheets in your own Drive.
+            <View style={styles.instructionBox}>
+              <View style={styles.instructionHeader}>
+                <Info size={20} color="#1a73e8" />
+                <Text style={styles.instructionTitle}>How it works</Text>
+              </View>
+              <Text style={styles.instructionText}>
+                Your data will be exported to Google Sheets using our service account. Enter your email below to receive edit access to the spreadsheet.
+              </Text>
+              {serviceAccountEmail && (
+                <View style={styles.serviceAccountInfo}>
+                  <Text style={styles.serviceAccountLabel}>Service account:</Text>
+                  <Text style={styles.serviceAccountEmail} selectable>{serviceAccountEmail}</Text>
+                  <Text style={styles.folderShareHint}>
+                    To save in a specific folder, share that folder with this email first.
                   </Text>
-                  <Text style={styles.redirectNote}>
-                    Add this redirect URI to your Google Cloud Console Web OAuth credentials:
-                  </Text>
-                  <Text style={styles.redirectUri} selectable>{redirectUri}</Text>
                 </View>
+              )}
+            </View>
 
-                <TouchableOpacity
-                  style={[styles.signInButton, isAuthenticating && styles.buttonDisabled]}
-                  onPress={handleSignIn}
-                  disabled={isAuthenticating}
-                >
-                  {isAuthenticating ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <>
-                      <LogIn size={20} color="white" />
-                      <Text style={styles.signInButtonText}>Sign in with Google</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+            <View style={styles.inputSection}>
+              <Text style={styles.label}>Your Email (optional):</Text>
+              <Text style={styles.helperText}>
+                Enter your email to receive edit access to the spreadsheet.
+              </Text>
+              <View style={styles.inputContainer}>
+                <Mail size={20} color="#666" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="your@email.com"
+                  placeholderTextColor="#999"
+                  value={shareEmail}
+                  onChangeText={setShareEmail}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                />
+              </View>
+            </View>
 
-                {result?.error && (
-                  <View style={[styles.resultBox, styles.resultError]}>
+            <View style={styles.inputSection}>
+              <Text style={styles.label}>Google Drive Folder Link (optional):</Text>
+              <Text style={styles.helperText}>
+                Paste a folder link to save in a specific folder. Make sure the folder is shared with the service account email above.
+              </Text>
+              <View style={styles.inputContainer}>
+                <FolderOpen size={20} color="#666" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="https://drive.google.com/drive/folders/..."
+                  placeholderTextColor="#999"
+                  value={folderLink}
+                  onChangeText={setFolderLink}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+              <TouchableOpacity 
+                style={styles.pasteButton}
+                onPress={handlePasteFromClipboard}
+              >
+                <Text style={styles.pasteButtonText}>Paste from clipboard</Text>
+              </TouchableOpacity>
+            </View>
+
+            {result && (
+              <View style={[
+                styles.resultBox,
+                result.success ? styles.resultSuccess : styles.resultError
+              ]}>
+                {result.success ? (
+                  <>
+                    <Check size={20} color="#34A853" />
+                    <View style={styles.resultContent}>
+                      <Text style={styles.resultSuccessText}>
+                        Spreadsheet exported successfully!
+                      </Text>
+                      {result.spreadsheetUrl && (
+                        <TouchableOpacity 
+                          style={styles.openLink}
+                          onPress={handleOpenSpreadsheet}
+                        >
+                          <Text style={styles.openLinkText}>Open Spreadsheet</Text>
+                          <ExternalLink size={16} color="#1a73e8" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </>
+                ) : (
+                  <>
                     <AlertCircle size={20} color="#dc3545" />
                     <Text style={styles.resultErrorText}>{result.error}</Text>
-                  </View>
+                  </>
                 )}
-              </>
-            ) : (
-              <>
-                <View style={styles.signedInBox}>
-                  <View style={styles.signedInInfo}>
-                    <Check size={20} color="#34A853" />
-                    <View style={styles.signedInTextContainer}>
-                      <Text style={styles.signedInText}>Signed in as</Text>
-                      <Text style={styles.signedInEmail}>{userEmail || 'Google User'}</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity onPress={handleSignOut}>
-                    <Text style={styles.signOutText}>Sign out</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.inputSection}>
-                  <Text style={styles.label}>Google Drive Folder Link (optional):</Text>
-                  <Text style={styles.helperText}>
-                    Paste a folder link to save the spreadsheet in a specific folder, or leave empty to save in your Drive root.
-                  </Text>
-                  <View style={styles.inputContainer}>
-                    <FolderOpen size={20} color="#666" style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="https://drive.google.com/drive/folders/..."
-                      placeholderTextColor="#999"
-                      value={folderLink}
-                      onChangeText={setFolderLink}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                  </View>
-                  <TouchableOpacity 
-                    style={styles.pasteButton}
-                    onPress={handlePasteFromClipboard}
-                  >
-                    <Text style={styles.pasteButtonText}>Paste from clipboard</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {result && (
-                  <View style={[
-                    styles.resultBox,
-                    result.success ? styles.resultSuccess : styles.resultError
-                  ]}>
-                    {result.success ? (
-                      <>
-                        <Check size={20} color="#34A853" />
-                        <View style={styles.resultContent}>
-                          <Text style={styles.resultSuccessText}>
-                            Spreadsheet exported successfully!
-                          </Text>
-                          {result.spreadsheetUrl && (
-                            <TouchableOpacity 
-                              style={styles.openLink}
-                              onPress={handleOpenSpreadsheet}
-                            >
-                              <Text style={styles.openLinkText}>Open Spreadsheet</Text>
-                              <ExternalLink size={16} color="#1a73e8" />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle size={20} color="#dc3545" />
-                        <Text style={styles.resultErrorText}>{result.error}</Text>
-                      </>
-                    )}
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  style={[
-                    styles.exportButton,
-                    isExporting && styles.exportButtonDisabled
-                  ]}
-                  onPress={handleExport}
-                  disabled={isExporting}
-                >
-                  {isExporting ? (
-                    <ActivityIndicator color="white" />
-                  ) : (
-                    <>
-                      <FileSpreadsheet size={20} color="white" />
-                      <Text style={styles.exportButtonText}>Export to Google Sheets</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </>
+              </View>
             )}
+
+            <TouchableOpacity
+              style={[
+                styles.exportButton,
+                isExporting && styles.exportButtonDisabled
+              ]}
+              onPress={handleExport}
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <>
+                  <FileSpreadsheet size={20} color="white" />
+                  <Text style={styles.exportButtonText}>Export to Google Sheets</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </ScrollView>
         </Pressable>
       </Pressable>
@@ -468,81 +362,43 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 20,
   },
+  instructionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
   instructionTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#1a73e8',
-    marginBottom: 8,
   },
   instructionText: {
     fontSize: 14,
     color: '#333',
     lineHeight: 20,
   },
-  redirectNote: {
+  serviceAccountInfo: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#c8dff8',
+  },
+  serviceAccountLabel: {
     fontSize: 12,
     color: '#666',
-    marginTop: 12,
   },
-  redirectUri: {
-    fontSize: 11,
-    color: '#1a73e8',
-    backgroundColor: '#f0f7ff',
-    padding: 8,
-    borderRadius: 4,
-    marginTop: 4,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-
-  signInButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4285F4',
-    borderRadius: 12,
-    padding: 16,
-    gap: 10,
-    marginBottom: 20,
-  },
-  signInButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'white',
-  },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  signedInBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#e6f4ea',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  signedInInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  signedInTextContainer: {
-    flex: 1,
-  },
-  signedInText: {
+  serviceAccountEmail: {
     fontSize: 12,
-    color: '#137333',
-  },
-  signedInEmail: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#137333',
-  },
-  signOutText: {
-    fontSize: 14,
     color: '#1a73e8',
-    fontWeight: '500',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginTop: 2,
+  },
+  folderShareHint: {
+    fontSize: 11,
+    color: '#666',
+    fontStyle: 'italic' as const,
+    marginTop: 6,
   },
   label: {
     fontSize: 14,
