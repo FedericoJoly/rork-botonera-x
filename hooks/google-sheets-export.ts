@@ -170,6 +170,8 @@ function generateCurrenciesData(data: ExportData): (string | number)[][] {
 
 const GOOGLE_CLIENT_ID = '407408718192.apps.googleusercontent.com';
 
+const EXPO_PROXY_REDIRECT_URI = 'https://auth.expo.io/@anonymous/rork-app';
+
 const discovery = {
   authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
   tokenEndpoint: 'https://oauth2.googleapis.com/token',
@@ -177,9 +179,7 @@ const discovery = {
 };
 
 export function useGoogleAuth() {
-  const redirectUri = AuthSession.makeRedirectUri({
-    scheme: 'exp',
-  });
+  const redirectUri = EXPO_PROXY_REDIRECT_URI;
   
   console.log('📱 Google Auth redirect URI:', redirectUri);
 
