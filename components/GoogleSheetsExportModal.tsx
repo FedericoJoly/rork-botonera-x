@@ -22,7 +22,7 @@ import { Transaction, Product, AppSettings, ExchangeRates } from '@/types/sales'
 
 WebBrowser.maybeCompleteAuthSession();
 
-const WEB_CLIENT_ID = '364250874736-YOUR_WEB_CLIENT_ID.apps.googleusercontent.com';
+const WEB_CLIENT_ID = '364250874736-d8jluj1cua2tu0ofpv884ao06vrl6her.apps.googleusercontent.com';
 
 const discovery = {
   authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
