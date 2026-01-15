@@ -121,14 +121,21 @@ export default function GoogleSheetsExportModal({ visible, onClose, exportData }
     setResult(null);
     try {
       // Use Google's OAuth 2.0 playground-style implicit flow
-      const clientId = '407408718192.apps.googleusercontent.com';
+      const clientId = '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com';
       const scopes = [
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive.file',
         'https://www.googleapis.com/auth/userinfo.email',
       ].join(' ');
       
-      const redirectUri = AuthSession.makeRedirectUri();
+      // For iOS OAuth, use reverse client ID as the scheme
+      const iosScheme = 'com.googleusercontent.apps.364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov';
+      const redirectUri = Platform.select({
+        ios: `${iosScheme}:/oauth2redirect/google`,
+        android: `${iosScheme}:/oauth2redirect/google`,
+        default: AuthSession.makeRedirectUri(),
+      });
+      
       console.log('📱 Redirect URI:', redirectUri);
       
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +

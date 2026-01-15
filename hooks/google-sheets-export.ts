@@ -168,9 +168,8 @@ function generateCurrenciesData(data: ExportData): (string | number)[][] {
   return rows;
 }
 
-const GOOGLE_CLIENT_ID = '407408718192.apps.googleusercontent.com';
-
-const EXPO_PROXY_REDIRECT_URI = 'https://auth.expo.io/@anonymous/rork-app';
+const GOOGLE_CLIENT_ID = '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com';
+const IOS_SCHEME = 'com.googleusercontent.apps.364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov';
 
 const discovery = {
   authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
@@ -179,7 +178,11 @@ const discovery = {
 };
 
 export function useGoogleAuth() {
-  const redirectUri = EXPO_PROXY_REDIRECT_URI;
+  const redirectUri = Platform.select({
+    ios: `${IOS_SCHEME}:/oauth2redirect/google`,
+    android: `${IOS_SCHEME}:/oauth2redirect/google`,
+    default: AuthSession.makeRedirectUri(),
+  });
   
   console.log('📱 Google Auth redirect URI:', redirectUri);
 
