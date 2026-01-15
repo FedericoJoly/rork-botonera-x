@@ -41,7 +41,7 @@ const FOLDER_LINK_STORAGE_KEY = 'google_drive_folder_link';
 const ACCESS_TOKEN_STORAGE_KEY = 'google_access_token';
 const USER_EMAIL_STORAGE_KEY = 'google_user_email';
 
-export default function GoogleSheetsExportModal({ visible, onClose, exportData }: Props) {
+function GoogleSheetsExportModalContent({ visible, onClose, exportData }: Props) {
   const [folderLink, setFolderLink] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -360,6 +360,44 @@ export default function GoogleSheetsExportModal({ visible, onClose, exportData }
   );
 }
 
+export default function GoogleSheetsExportModal(props: Props) {
+  if (Platform.OS === 'web') {
+    return (
+      <Modal
+        visible={props.visible}
+        animationType="slide"
+        transparent
+        onRequestClose={props.onClose}
+      >
+        <Pressable style={styles.overlay} onPress={props.onClose}>
+          <Pressable style={styles.container} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.header}>
+              <View style={styles.headerTitle}>
+                <FileSpreadsheet size={24} color="#34A853" />
+                <Text style={styles.title}>Export to Google Sheets</Text>
+              </View>
+              <TouchableOpacity onPress={props.onClose} style={styles.closeButton}>
+                <X size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.content}>
+              <View style={styles.webNoticeBox}>
+                <AlertCircle size={24} color="#f59e0b" />
+                <Text style={styles.webNoticeTitle}>Mobile App Required</Text>
+                <Text style={styles.webNoticeText}>
+                  Google Sheets export is only available on the iOS app. Please use the mobile app to export your data directly to Google Sheets.
+                </Text>
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    );
+  }
+
+  return <GoogleSheetsExportModalContent {...props} />;
+}
+
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -567,5 +605,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: 'white',
+  },
+  webNoticeBox: {
+    backgroundColor: '#fef3c7',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    gap: 12,
+  },
+  webNoticeTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#92400e',
+  },
+  webNoticeText: {
+    fontSize: 14,
+    color: '#78350f',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
