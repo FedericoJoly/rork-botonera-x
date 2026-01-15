@@ -15,8 +15,8 @@ import {
 import { X, FolderOpen, ExternalLink, Check, FileSpreadsheet, AlertCircle, LogIn } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
-import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 import { exportToGoogleSheets } from '@/hooks/google-sheets-export';
 import { Transaction, Product, AppSettings, ExchangeRates } from '@/types/sales';
 
@@ -58,12 +58,6 @@ function GoogleSheetsExportModalContent({ visible, onClose, exportData }: Props)
     error?: string;
     spreadsheetUrl?: string;
   } | null>(null);
-
-  const redirectUri = AuthSession.makeRedirectUri({
-    preferLocalhost: false,
-  });
-
-  console.log('📱 Redirect URI:', redirectUri);
 
   const fetchUserInfo = async (token: string) => {
     try {
@@ -132,43 +126,47 @@ function GoogleSheetsExportModalContent({ visible, onClose, exportData }: Props)
     }
   };
 
+  const redirectUri = AuthSession.makeRedirectUri();
+
+  const [, response, promptAsync] = AuthSession.useAuthRequest(
+    {
+      clientId: WEB_CLIENT_ID,
+      scopes: [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive.file', 
+        'https://www.googleapis.com/auth/userinfo.email',
+      ],
+      responseType: AuthSession.ResponseType.Token,
+      redirectUri,
+    },
+    discovery
+  );
+
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { access_token } = response.params;
+      if (access_token) {
+        console.log('✅ Got access token from Google');
+        setAccessToken(access_token);
+        AsyncStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, access_token);
+        fetchUserInfo(access_token);
+      }
+    } else if (response?.type === 'error') {
+      console.error('❌ Auth error:', response.params);
+      setResult({ 
+        success: false, 
+        error: response.params?.error_description || response.params?.error || 'Authentication failed' 
+      });
+    }
+  }, [response]);
+
   const handleSignIn = async () => {
     setIsAuthenticating(true);
     setResult(null);
     try {
       console.log('📱 Starting Google Sign-In...');
-      console.log('📱 Using redirect URI:', redirectUri);
-      
-      const authRequestOptions: AuthSession.AuthRequestConfig = {
-        clientId: WEB_CLIENT_ID,
-        redirectUri,
-        scopes: [
-          'https://www.googleapis.com/auth/spreadsheets',
-          'https://www.googleapis.com/auth/drive.file',
-          'https://www.googleapis.com/auth/userinfo.email',
-        ],
-        responseType: AuthSession.ResponseType.Token,
-        usePKCE: false,
-      };
-      
-      const authRequest = new AuthSession.AuthRequest(authRequestOptions);
-      
-      const response = await authRequest.promptAsync(discovery);
-      
-      console.log('📱 Auth response type:', response.type);
-      
-      if (response.type === 'success' && response.params?.access_token) {
-        const token = response.params.access_token;
-        console.log('✅ Got access token from Google');
-        setAccessToken(token);
-        AsyncStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
-        fetchUserInfo(token);
-      } else if (response.type === 'error') {
-        console.error('❌ Auth error:', response.params);
-        setResult({ success: false, error: response.params?.error_description || response.params?.error || 'Authentication failed' });
-      } else if (response.type === 'dismiss' || response.type === 'cancel') {
-        console.log('📱 Auth cancelled/dismissed');
-      }
+      console.log('📱 Redirect URI:', redirectUri);
+      await promptAsync();
     } catch (error: any) {
       console.error('Sign in error:', error);
       setResult({ success: false, error: 'Failed to authenticate: ' + error.message });
@@ -256,8 +254,10 @@ function GoogleSheetsExportModalContent({ visible, onClose, exportData }: Props)
                   <Text style={styles.instructionText}>
                     Sign in with your Google account to export your sales data directly to Google Sheets in your own Drive.
                   </Text>
-                  <Text style={styles.redirectUriLabel}>Required redirect URI:</Text>
-                  <Text style={styles.redirectUriText} selectable>{redirectUri}</Text>
+                  <Text style={styles.redirectNote}>
+                    Add this redirect URI to your Google Cloud Console Web OAuth credentials:
+                  </Text>
+                  <Text style={styles.redirectUri} selectable>{redirectUri}</Text>
                 </View>
 
                 <TouchableOpacity
@@ -479,21 +479,21 @@ const styles = StyleSheet.create({
     color: '#333',
     lineHeight: 20,
   },
-  redirectUriLabel: {
+  redirectNote: {
     fontSize: 12,
     color: '#666',
     marginTop: 12,
-    fontWeight: '500' as const,
   },
-  redirectUriText: {
+  redirectUri: {
     fontSize: 11,
     color: '#1a73e8',
-    backgroundColor: '#f0f4f8',
+    backgroundColor: '#f0f7ff',
     padding: 8,
     borderRadius: 4,
     marginTop: 4,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
+
   signInButton: {
     flexDirection: 'row',
     alignItems: 'center',
