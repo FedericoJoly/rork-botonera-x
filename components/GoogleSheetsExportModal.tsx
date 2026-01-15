@@ -36,13 +36,8 @@ interface Props {
 }
 
 const FOLDER_LINK_STORAGE_KEY = 'google_drive_folder_link';
-const GOOGLE_CLIENT_ID = '407408718192.apps.googleusercontent.com';
-
-const discovery = {
-  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-  tokenEndpoint: 'https://oauth2.googleapis.com/token',
-  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
-};
+const ACCESS_TOKEN_STORAGE_KEY = 'google_access_token';
+const USER_EMAIL_STORAGE_KEY = 'google_user_email';
 
 export default function GoogleSheetsExportModal({ visible, onClose, exportData }: Props) {
   const [folderLink, setFolderLink] = useState('');
@@ -56,40 +51,6 @@ export default function GoogleSheetsExportModal({ visible, onClose, exportData }
     spreadsheetUrl?: string;
   } | null>(null);
 
-  const redirectUri = AuthSession.makeRedirectUri({
-    scheme: 'exp',
-  });
-
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: GOOGLE_CLIENT_ID,
-      scopes: [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive.file',
-        'https://www.googleapis.com/auth/userinfo.email',
-      ],
-      redirectUri,
-      responseType: AuthSession.ResponseType.Token,
-    },
-    discovery
-  );
-
-  useEffect(() => {
-    if (response?.type === 'success' && response.authentication) {
-      const token = response.authentication.accessToken;
-      console.log('✅ Got Google access token');
-      setAccessToken(token);
-      fetchUserInfo(token);
-      setIsAuthenticating(false);
-    } else if (response?.type === 'error') {
-      console.error('❌ Auth error:', response.error);
-      setIsAuthenticating(false);
-      setResult({ success: false, error: 'Authentication failed. Please try again.' });
-    } else if (response?.type === 'dismiss') {
-      setIsAuthenticating(false);
-    }
-  }, [response]);
-
   const fetchUserInfo = async (token: string) => {
     try {
       const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -98,6 +59,7 @@ export default function GoogleSheetsExportModal({ visible, onClose, exportData }
       const data = await res.json();
       if (data.email) {
         setUserEmail(data.email);
+        await AsyncStorage.setItem(USER_EMAIL_STORAGE_KEY, data.email);
         console.log('📧 User email:', data.email);
       }
     } catch (error) {
@@ -105,9 +67,32 @@ export default function GoogleSheetsExportModal({ visible, onClose, exportData }
     }
   };
 
+  const loadSavedAuth = async () => {
+    try {
+      const savedToken = await AsyncStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+      const savedEmail = await AsyncStorage.getItem(USER_EMAIL_STORAGE_KEY);
+      if (savedToken) {
+        // Verify token is still valid
+        const res = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + savedToken);
+        if (res.ok) {
+          setAccessToken(savedToken);
+          if (savedEmail) setUserEmail(savedEmail);
+          console.log('✅ Loaded saved Google auth');
+        } else {
+          // Token expired, clear it
+          await AsyncStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+          await AsyncStorage.removeItem(USER_EMAIL_STORAGE_KEY);
+        }
+      }
+    } catch (error) {
+      console.log('Failed to load saved auth:', error);
+    }
+  };
+
   useEffect(() => {
     if (visible) {
       loadSavedFolderLink();
+      loadSavedAuth();
       setResult(null);
     }
   }, [visible]);
@@ -135,18 +120,60 @@ export default function GoogleSheetsExportModal({ visible, onClose, exportData }
     setIsAuthenticating(true);
     setResult(null);
     try {
-      await promptAsync();
+      // Use Google's OAuth 2.0 playground-style implicit flow
+      const clientId = '407408718192.apps.googleusercontent.com';
+      const scopes = [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive.file',
+        'https://www.googleapis.com/auth/userinfo.email',
+      ].join(' ');
+      
+      const redirectUri = AuthSession.makeRedirectUri();
+      console.log('📱 Redirect URI:', redirectUri);
+      
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=token` +
+        `&scope=${encodeURIComponent(scopes)}` +
+        `&prompt=consent`;
+      
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
+      
+      if (result.type === 'success' && result.url) {
+        console.log('✅ Auth callback URL:', result.url);
+        // Extract access token from URL fragment
+        const urlParts = result.url.split('#');
+        if (urlParts.length > 1) {
+          const params = new URLSearchParams(urlParts[1]);
+          const token = params.get('access_token');
+          if (token) {
+            console.log('✅ Got access token');
+            setAccessToken(token);
+            await AsyncStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+            fetchUserInfo(token);
+          } else {
+            const error = params.get('error');
+            setResult({ success: false, error: error || 'No access token received' });
+          }
+        }
+      } else if (result.type === 'cancel' || result.type === 'dismiss') {
+        console.log('🚫 Auth cancelled');
+      }
     } catch (error: any) {
       console.error('Sign in error:', error);
+      setResult({ success: false, error: 'Failed to start authentication: ' + error.message });
+    } finally {
       setIsAuthenticating(false);
-      setResult({ success: false, error: 'Failed to start authentication' });
     }
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     setAccessToken(null);
     setUserEmail(null);
     setResult(null);
+    await AsyncStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+    await AsyncStorage.removeItem(USER_EMAIL_STORAGE_KEY);
   };
 
   const handleExport = async () => {
@@ -225,7 +252,7 @@ export default function GoogleSheetsExportModal({ visible, onClose, exportData }
                 <TouchableOpacity
                   style={[styles.signInButton, isAuthenticating && styles.buttonDisabled]}
                   onPress={handleSignIn}
-                  disabled={!request || isAuthenticating}
+                  disabled={isAuthenticating}
                 >
                   {isAuthenticating ? (
                     <ActivityIndicator color="white" />
