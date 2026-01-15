@@ -8,10 +8,11 @@ import {
   useWindowDimensions,
   FlatList,
 } from 'react-native';
+import { FileSpreadsheet } from 'lucide-react-native';
 import { useSales } from '@/hooks/sales-store';
 import { Product } from '@/types/sales';
-
 import CustomHeader from '@/components/CustomHeader';
+import GoogleSheetsExportModal from '@/components/GoogleSheetsExportModal';
 
 interface ProductSummary {
   product: Product;
@@ -68,7 +69,17 @@ export default function TotalsScreen() {
   const mainCurrency = settings.currency;
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentSection, setCurrentSection] = useState(0);
+  const [showExportModal, setShowExportModal] = useState(false);
   const { width: screenWidth } = useWindowDimensions();
+
+  const exportData = useMemo(() => ({
+    userName: settings.userName || 'User',
+    eventName: settings.eventName || 'Event',
+    transactions,
+    products,
+    settings,
+    exchangeRates,
+  }), [settings, transactions, products, exchangeRates]);
 
   // Calculate main currency total from all transactions
   const mainCurrencyTotal = useMemo(() => {
@@ -357,6 +368,13 @@ export default function TotalsScreen() {
       
       {/* Subtotals by Type */}
       <View style={dynamicStyles.totalSection}>
+        <TouchableOpacity 
+          style={dynamicStyles.exportButton}
+          onPress={() => setShowExportModal(true)}
+        >
+          <FileSpreadsheet size={18} color="white" />
+          <Text style={dynamicStyles.exportButtonText}>Export</Text>
+        </TouchableOpacity>
         {typeSubtotals.length > 0 ? (
           <>
             <Text style={dynamicStyles.subtotalsHeader}>Subtotals ({mainCurrency})</Text>
@@ -662,6 +680,12 @@ export default function TotalsScreen() {
           </View>
         </ScrollView>
       </ScrollView>
+
+      <GoogleSheetsExportModal
+        visible={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        exportData={exportData}
+      />
     </View>
   );
 }
@@ -705,6 +729,24 @@ const styles = (screenWidth: number) => StyleSheet.create({
   totalSection: {
     backgroundColor: '#2196F3',
     padding: 20,
+    position: 'relative' as const,
+  },
+  exportButton: {
+    position: 'absolute' as const,
+    top: 12,
+    right: 12,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
+  },
+  exportButtonText: {
+    color: 'white',
+    fontSize: 13,
+    fontWeight: '600' as const,
   },
   subtotalsHeader: {
     fontSize: 14,

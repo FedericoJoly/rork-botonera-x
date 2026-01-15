@@ -555,6 +555,7 @@ export default function SetupScreen() {
           USD: exchangeRates?.USD || 1,
           EUR: exchangeRates?.EUR || 0.92,
           GBP: exchangeRates?.GBP || 0.79,
+          lastUpdated: exchangeRates?.lastUpdated || new Date(),
         },
       });
 
