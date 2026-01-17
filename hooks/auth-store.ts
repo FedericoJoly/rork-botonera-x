@@ -19,6 +19,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [, response, promptAsync] = Google.useAuthRequest({
     iosClientId: '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com',
     androidClientId: '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com',
+    webClientId: '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com',
   });
 
 
