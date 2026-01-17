@@ -1,8 +1,12 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
 import { databaseService } from './database';
 import { User, Event } from '@/types/auth';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -11,6 +15,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [googleAuthSuccess, setGoogleAuthSuccess] = useState(false);
+
+  const [, response, promptAsync] = Google.useAuthRequest({
+    iosClientId: '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com',
+    androidClientId: '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com',
+  });
+
 
   useEffect(() => {
     const loadAuthState = async () => {
@@ -146,9 +156,18 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
   }, []);
 
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { authentication } = response;
+      if (authentication?.accessToken) {
+        processGoogleAuth(authentication.accessToken);
+      }
+    }
+  }, [response, processGoogleAuth]);
+
   const loginWithGoogleWeb = useCallback(async (): Promise<boolean> => {
     return new Promise((resolve) => {
-      const GOOGLE_CLIENT_ID = '364250874736-727uosq13mcv0jjomvc8rh85jekb8b82.apps.googleusercontent.com';
+      const GOOGLE_CLIENT_ID = '364250874736-qimqj4g3e9hg0h5av73eccjvop0r40ov.apps.googleusercontent.com';
       
       // Check if GSI script is loaded
       const loadGSIScript = (): Promise<void> => {
@@ -221,16 +240,26 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (Platform.OS === 'web') {
         return await loginWithGoogleWeb();
       } else {
-        console.log('❌ Google Sign-In not supported on this platform in development');
-        setIsGoogleLoading(false);
-        return false;
+        console.log('📱 Starting native Google Sign-In...');
+        const result = await promptAsync();
+        
+        if (result?.type === 'success') {
+          console.log('✅ Native sign-in successful, processing token...');
+          const success = await processGoogleAuth(result.authentication!.accessToken);
+          setIsGoogleLoading(false);
+          return success;
+        } else {
+          console.log('❌ Native sign-in failed or cancelled:', result?.type);
+          setIsGoogleLoading(false);
+          return false;
+        }
       }
     } catch (error) {
       console.error('❌ Google Sign-In error:', error);
       setIsGoogleLoading(false);
       return false;
     }
-  }, [loginWithGoogleWeb]);
+  }, [loginWithGoogleWeb, promptAsync, processGoogleAuth]);
 
   const register = useCallback(async (username: string, password: string, email: string = '', fullName: string = ''): Promise<boolean> => {
     try {
