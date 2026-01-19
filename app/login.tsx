@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
   forgotPasswordButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     paddingVertical: 4,
     gap: 6,
     marginBottom: 8,
