@@ -642,7 +642,7 @@ export default function SetupScreen() {
 
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.sectionNav}>
         <TouchableOpacity 
           style={styles.navArrow}
@@ -1863,7 +1863,6 @@ const styles = StyleSheet.create({
     borderTopColor: '#e0e0e0',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingBottom: 28,
     gap: 8,
   },
   bottomActionsHint: {
