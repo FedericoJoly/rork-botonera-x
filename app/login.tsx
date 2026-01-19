@@ -16,7 +16,7 @@ import { useAuth } from '@/hooks/auth-store';
 import Colors from '@/constants/colors';
 
 export default function LoginScreen() {
-  const { login, loginWithGoogle, isGoogleLoading, googleAuthSuccess, isAuthenticated } = useAuth();
+  const { login, googleAuthSuccess, isAuthenticated } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -72,14 +72,7 @@ export default function LoginScreen() {
     }
   }, [googleAuthSuccess, isAuthenticated]);
 
-  const handleGoogleLogin = async () => {
-    console.log('🔐 Google login button pressed');
-    const success = await loginWithGoogle();
-    if (success) {
-      console.log('✅ Google login successful, navigating to event-manager');
-      router.replace('/event-manager');
-    }
-  };
+
 
   const handleManageUsers = () => {
     router.push('/manage-users');
@@ -158,13 +151,13 @@ export default function LoginScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.button, styles.googleButton, isGoogleLoading && styles.buttonDisabled]}
-              onPress={handleGoogleLogin}
-              disabled={isLoading || isGoogleLoading}
+              style={[styles.button, styles.googleButton, styles.buttonDisabled]}
+              onPress={() => Alert.alert('Coming Soon', 'Google login is temporarily unavailable.')}
+              disabled={true}
             >
               <Chrome size={20} color="#fff" />
               <Text style={styles.buttonText}>
-                {isGoogleLoading ? 'Signing in...' : 'Continue with Google'}
+                Continue with Google
               </Text>
             </TouchableOpacity>
 

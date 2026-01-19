@@ -1069,29 +1069,20 @@ export default function SetupScreen() {
             <Text style={styles.lockedWarningText}>🔒 This event is locked. Changes cannot be saved.</Text>
           </View>
         )}
-        <Text style={styles.bottomActionsHint}>Event Actions</Text>
         
-        {/* Row 1: GSheet, Export, Save */}
+        {/* Event Actions Section */}
+        <Text style={styles.bottomActionsHint}>Event Actions</Text>
         <View style={styles.actionButtons}>
           <TouchableOpacity
-            style={styles.exportButton}
-            onPress={handleExportToGoogleSheets}
-            testID="export-gsheet-button"
-          >
-            <FileSpreadsheet size={20} color="white" />
-            <Text style={styles.exportButtonText}>GSheet</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.exportEventButton, isLocked && styles.exportEventButtonDisabled]}
-            onPress={handleExportEvent}
-            testID="export-event-button"
+            style={[styles.resetPanelButton, isLocked && styles.resetPanelButtonDisabled]}
+            onPress={handleResetPanelData}
+            testID="reset-panel-data-button"
             disabled={isLocked}
           >
-            <Download size={20} color={isLocked ? '#999' : 'white'} />
-            <Text style={[styles.exportEventButtonText, isLocked && styles.disabledButtonText]}>Export</Text>
+            <RotateCcw size={20} color="#FF9500" />
+            <Text style={styles.resetPanelButtonText}>Reset</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={[styles.saveDataButton, isLocked && styles.saveDataButtonDisabled]}
             onPress={() => {
@@ -1107,19 +1098,6 @@ export default function SetupScreen() {
             <Save size={20} color={isLocked ? "#999" : "white"} />
             <Text style={[styles.saveDataButtonText, isLocked && styles.disabledButtonText]}>Save</Text>
           </TouchableOpacity>
-        </View>
-        
-        {/* Row 2: Reset, Quit */}
-        <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={[styles.resetPanelButton, isLocked && styles.resetPanelButtonDisabled]}
-            onPress={handleResetPanelData}
-            testID="reset-panel-data-button"
-            disabled={isLocked}
-          >
-            <RotateCcw size={20} color="#FF9500" />
-            <Text style={styles.resetPanelButtonText}>Reset</Text>
-          </TouchableOpacity>
           
           <TouchableOpacity
             style={styles.quitEventButton}
@@ -1128,6 +1106,39 @@ export default function SetupScreen() {
           >
             <X size={20} color="#FF3B30" />
             <Text style={styles.quitEventButtonText}>Quit</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Export Actions Section */}
+        <Text style={[styles.bottomActionsHint, { marginTop: 12 }]}>Export Actions</Text>
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={styles.xlsButton}
+            onPress={handleExportToGoogleSheets}
+            testID="export-xls-button"
+          >
+            <FileSpreadsheet size={20} color="white" />
+            <Text style={styles.xlsButtonText}>XLS</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.gsheetButton, styles.gsheetButtonDisabled]}
+            onPress={() => Alert.alert('Coming Soon', 'Google Drive integration will be available in a future update.')}
+            testID="export-gsheet-button"
+            disabled={true}
+          >
+            <FileSpreadsheet size={20} color="#999" />
+            <Text style={styles.gsheetButtonText}>GSheet</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.exportEventButton, isLocked && styles.exportEventButtonDisabled]}
+            onPress={handleExportEvent}
+            testID="export-json-button"
+            disabled={isLocked}
+          >
+            <Download size={20} color={isLocked ? '#999' : 'white'} />
+            <Text style={[styles.exportEventButtonText, isLocked && styles.disabledButtonText]}>JSON</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1912,18 +1923,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  exportButton: {
+  xlsButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#34C759',
+    backgroundColor: '#1B5E20', // Dark green
     paddingVertical: 12,
     borderRadius: 8,
     gap: 4,
   },
-  exportButtonText: {
+  xlsButtonText: {
     color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  gsheetButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e0e0e0',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 4,
+  },
+  gsheetButtonDisabled: {
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  gsheetButtonText: {
+    color: '#999',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1932,7 +1963,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#5856D6',
+    backgroundColor: '#8A2BE2', // Violet
     paddingVertical: 12,
     borderRadius: 8,
     gap: 4,
