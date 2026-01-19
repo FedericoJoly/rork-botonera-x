@@ -7,7 +7,6 @@ export type NavigationBlockerAction = () => Promise<void> | void;
 export const [NavigationBlockerProvider, useNavigationBlocker] = createContextHook(() => {
   const [isBlocking, setIsBlocking] = useState(false);
   const [onSave, setOnSave] = useState<NavigationBlockerAction | null>(null);
-  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
 
   const enableBlocking = useCallback((saveAction: NavigationBlockerAction) => {
     console.log('🚫 Navigation blocking enabled');
@@ -19,7 +18,6 @@ export const [NavigationBlockerProvider, useNavigationBlocker] = createContextHo
     console.log('✅ Navigation blocking disabled');
     setIsBlocking(false);
     setOnSave(null);
-    setPendingNavigation(null);
   }, []);
 
   const checkNavigation = useCallback((navigateAction: () => void): boolean => {
@@ -30,7 +28,6 @@ export const [NavigationBlockerProvider, useNavigationBlocker] = createContextHo
     }
 
     console.log('🚫 Navigation blocked, showing alert');
-    setPendingNavigation(() => navigateAction);
     
     Alert.alert(
       'Unsaved Changes',
@@ -50,7 +47,6 @@ export const [NavigationBlockerProvider, useNavigationBlocker] = createContextHo
           style: 'cancel',
           onPress: () => {
             console.log('⏸️ Navigation cancelled');
-            setPendingNavigation(null);
           },
         },
         {
