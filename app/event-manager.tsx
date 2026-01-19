@@ -733,6 +733,7 @@ export default function EventManagerScreen() {
             style={styles.logo}
             resizeMode="contain"
           />
+          <Text style={styles.versionText}>Version 2026.01</Text>
           <Text style={styles.subtitle}>Welcome {currentUser?.fullName || currentUser?.username}!</Text>
         </View>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
@@ -990,6 +991,11 @@ const styles = StyleSheet.create({
   logo: {
     width: 200,
     height: 40,
+    marginBottom: 4,
+  },
+  versionText: {
+    fontSize: 10,
+    color: '#999',
     marginBottom: 4,
   },
   subtitle: {

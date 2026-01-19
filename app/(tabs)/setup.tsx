@@ -699,7 +699,7 @@ export default function SetupScreen() {
             style={{ flex: 1 }}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
           >
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.sectionScroll}>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.sectionScroll} contentContainerStyle={{ paddingBottom: 250 }}>
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Event Settings</Text>
               
@@ -1079,8 +1079,8 @@ export default function SetupScreen() {
             testID="reset-panel-data-button"
             disabled={isLocked}
           >
-            <RotateCcw size={20} color="#FF9500" />
-            <Text style={styles.resetPanelButtonText}>Reset</Text>
+            <RotateCcw size={20} color={isLocked ? "#999" : "white"} />
+            <Text style={[styles.resetPanelButtonText, isLocked && styles.disabledButtonText]}>Reset</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1104,7 +1104,7 @@ export default function SetupScreen() {
             onPress={handleQuitEvent}
             testID="quit-event-button"
           >
-            <X size={20} color="#FF3B30" />
+            <X size={20} color="white" />
             <Text style={styles.quitEventButtonText}>Quit</Text>
           </TouchableOpacity>
         </View>
@@ -1862,7 +1862,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 4,
     gap: 8,
   },
   bottomActionsHint: {
@@ -1895,15 +1896,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#FF3B30',
+    backgroundColor: '#FF3B30',
     paddingVertical: 12,
     borderRadius: 8,
     gap: 4,
   },
   quitEventButtonText: {
-    color: '#FF3B30',
+    color: 'white',
     fontSize: 14,
     fontWeight: '600',
   },
@@ -2009,15 +2008,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#FF9500',
+    backgroundColor: '#FF9500',
     paddingVertical: 12,
     borderRadius: 8,
     gap: 4,
   },
   resetPanelButtonText: {
-    color: '#FF9500',
+    color: 'white',
     fontSize: 14,
     fontWeight: '600',
   },

@@ -91,6 +91,7 @@ export default function LoginScreen() {
               style={styles.logo}
               resizeMode="contain"
             />
+            <Text style={styles.versionText}>Version 2026.01</Text>
             <Text style={styles.subtitle}>Sign in to continue</Text>
           </View>
 
@@ -206,6 +207,11 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#666',
+  },
+  versionText: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 8,
   },
   form: {
     width: '100%',
