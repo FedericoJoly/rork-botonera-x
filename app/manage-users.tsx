@@ -29,6 +29,7 @@ export default function ManageUsersScreen() {
   const [editEmail, setEditEmail] = useState('');
   const [editFullName, setEditFullName] = useState('');
   const [editPassword, setEditPassword] = useState('');
+  const [editRole, setEditRole] = useState<UserRole>('standard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authUsername, setAuthUsername] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -77,6 +78,7 @@ export default function ManageUsersScreen() {
     setEditEmail(user.email);
     setEditFullName(user.fullName);
     setEditPassword('');
+    setEditRole(user.role);
     setEditModalVisible(true);
   };
 
@@ -103,6 +105,15 @@ export default function ManageUsersScreen() {
         }
         const passwordHash = hashPassword(editPassword);
         await databaseService.updateUserPassword(selectedUser.id, passwordHash);
+      }
+
+      if (editRole !== selectedUser.role) {
+        const adminUsers = users.filter(u => u.role === 'admin');
+        if (selectedUser.role === 'admin' && editRole === 'standard' && adminUsers.length <= 1) {
+          Alert.alert('Cannot Change Role', 'Cannot demote the last admin user to standard');
+          return;
+        }
+        await databaseService.updateUserRole(selectedUser.id, editRole);
       }
 
       Alert.alert('Success', 'User updated successfully');
@@ -438,6 +449,42 @@ export default function ManageUsersScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
+              </View>
+
+              <Text style={styles.roleLabel}>User Level</Text>
+              <View style={styles.roleButtonsContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.roleButton,
+                    editRole === 'admin' && styles.roleButtonActive,
+                    editRole === 'admin' && styles.adminRoleActive,
+                  ]}
+                  onPress={() => setEditRole('admin')}
+                >
+                  <Shield size={18} color={editRole === 'admin' ? '#fff' : '#666'} />
+                  <Text style={[
+                    styles.roleButtonText,
+                    editRole === 'admin' && styles.roleButtonTextActive,
+                  ]}>
+                    Admin
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.roleButton,
+                    editRole === 'standard' && styles.roleButtonActive,
+                    editRole === 'standard' && styles.standardRoleActive,
+                  ]}
+                  onPress={() => setEditRole('standard')}
+                >
+                  <Users size={18} color={editRole === 'standard' ? '#fff' : '#666'} />
+                  <Text style={[
+                    styles.roleButtonText,
+                    editRole === 'standard' && styles.roleButtonTextActive,
+                  ]}>
+                    Standard
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.modalButtons}>

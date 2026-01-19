@@ -1239,6 +1239,30 @@ class DatabaseService {
     console.log('✅ Password updated in database');
   }
 
+  async updateUserRole(userId: string, role: UserRole): Promise<void> {
+    await this.initialize();
+
+    if (Platform.OS === 'web') {
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.USERS);
+      if (!stored) return;
+      const users: any[] = JSON.parse(stored);
+      const userIndex = users.findIndex(u => u.id === userId);
+      if (userIndex >= 0) {
+        users[userIndex].role = role;
+        await AsyncStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+        console.log('✅ User role updated in AsyncStorage');
+      }
+      return;
+    }
+
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.runAsync(
+      'UPDATE users SET role = ? WHERE id = ?',
+      [role, userId]
+    );
+    console.log('✅ User role updated in database');
+  }
+
   async deleteUser(userId: string): Promise<void> {
     await this.initialize();
 
