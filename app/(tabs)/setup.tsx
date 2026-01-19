@@ -1123,9 +1123,9 @@ export default function SetupScreen() {
 
           <TouchableOpacity
             style={[styles.gsheetButton, styles.gsheetButtonDisabled]}
-            onPress={() => Alert.alert('Coming Soon', 'Google Drive integration will be available in a future update.')}
+            onPress={() => Alert.alert('Coming Soon', 'This feature will be available in a future version.')}
             testID="export-gsheet-button"
-            disabled={true}
+            disabled={false}
           >
             <FileSpreadsheet size={20} color="#999" />
             <Text style={styles.gsheetButtonText}>GSheet</Text>

@@ -152,8 +152,8 @@ export default function LoginScreen() {
 
             <TouchableOpacity
               style={[styles.button, styles.googleButton, styles.buttonDisabled]}
-              onPress={() => Alert.alert('Coming Soon', 'Google login is temporarily unavailable.')}
-              disabled={true}
+              onPress={() => Alert.alert('Coming Soon', 'This feature will be available in a future version.')}
+              disabled={false}
             >
               <Chrome size={20} color="#fff" />
               <Text style={styles.buttonText}>
