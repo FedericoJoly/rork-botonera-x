@@ -196,13 +196,13 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   header: {
-    marginBottom: 48,
+    marginBottom: 16,
     alignItems: 'center',
   },
   logo: {
     width: 250,
     height: 60,
-    marginBottom: 8,
+    marginBottom: 2,
   },
   subtitle: {
     fontSize: 16,
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   versionText: {
     fontSize: 12,
     color: '#999',
-    marginBottom: 8,
+    marginBottom: 24,
   },
   form: {
     width: '100%',
