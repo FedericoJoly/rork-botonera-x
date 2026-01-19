@@ -17,7 +17,7 @@ export const passwordRecoveryRouter = createTRPCRouter({
       
       try {
         const { data, error } = await resend.emails.send({
-          from: 'Sales App <onboarding@resend.dev>',
+          from: 'Botonera X <onboarding@resend.dev>',
           to: input.email,
           subject: 'Your Password Has Been Reset',
           html: `
