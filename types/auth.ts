@@ -1,9 +1,12 @@
+export type UserRole = 'admin' | 'standard';
+
 export interface User {
   id: string;
   username: string;
   passwordHash: string;
   email: string;
   fullName: string;
+  role: UserRole;
   createdAt: Date;
   googleId?: string;
   avatarUrl?: string;

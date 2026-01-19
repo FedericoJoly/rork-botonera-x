@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { databaseService } from './database';
-import { User, Event } from '@/types/auth';
+import { User, Event, UserRole } from '@/types/auth';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -262,7 +262,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
   }, [loginWithGoogleWeb, promptAsync, processGoogleAuth]);
 
-  const register = useCallback(async (username: string, password: string, email: string = '', fullName: string = ''): Promise<boolean> => {
+  const register = useCallback(async (username: string, password: string, email: string = '', fullName: string = '', role?: UserRole): Promise<boolean> => {
     try {
       console.log('📝 Attempting registration for:', username);
       
@@ -273,7 +273,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       }
 
       const passwordHash = hashPassword(password);
-      const user = await databaseService.createUser(username, passwordHash, email, fullName);
+      const user = await databaseService.createUser(username, passwordHash, email, fullName, role);
       
       setCurrentUser(user);
       setIsAuthenticated(true);

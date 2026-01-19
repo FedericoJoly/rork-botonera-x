@@ -12,10 +12,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, Edit2, Trash2, Mail, User, Lock } from 'lucide-react-native';
+import { ArrowLeft, Edit2, Trash2, Mail, User, Lock, UserPlus, Shield, Users } from 'lucide-react-native';
 import { useAuth } from '@/hooks/auth-store';
 import { databaseService } from '@/hooks/database';
-import { User as UserType } from '@/types/auth';
+import { User as UserType, UserRole } from '@/types/auth';
 import Colors from '@/constants/colors';
 
 export default function ManageUsersScreen() {
@@ -23,6 +23,7 @@ export default function ManageUsersScreen() {
   const [users, setUsers] = useState<UserType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
   const [editUsername, setEditUsername] = useState('');
   const [editEmail, setEditEmail] = useState('');
@@ -32,6 +33,14 @@ export default function ManageUsersScreen() {
   const [authUsername, setAuthUsername] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  const [newUsername, setNewUsername] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newFullName, setNewFullName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newConfirmPassword, setNewConfirmPassword] = useState('');
+  const [newRole, setNewRole] = useState<UserRole>('standard');
+  const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -106,8 +115,9 @@ export default function ManageUsersScreen() {
   };
 
   const handleDeleteUser = (user: UserType) => {
-    if (user.username === 'fsj') {
-      Alert.alert('Cannot Delete', 'The root user (fsj) cannot be deleted');
+    const adminUsers = users.filter(u => u.role === 'admin');
+    if (user.role === 'admin' && adminUsers.length <= 1) {
+      Alert.alert('Cannot Delete', 'Cannot delete the last admin user');
       return;
     }
 
@@ -144,12 +154,22 @@ export default function ManageUsersScreen() {
       return;
     }
 
-    if (authUsername.trim() !== 'fsj') {
-      Alert.alert('Access Denied', 'Only the root user (fsj) can access this page');
+    setIsAuthenticating(true);
+    
+    const user = await databaseService.getUserByUsername(authUsername.trim());
+    
+    if (!user) {
+      setIsAuthenticating(false);
+      Alert.alert('Authentication Failed', 'User not found');
       return;
     }
 
-    setIsAuthenticating(true);
+    if (user.role !== 'admin') {
+      setIsAuthenticating(false);
+      Alert.alert('Access Denied', 'Only admin users can access this page');
+      return;
+    }
+
     const success = await login(authUsername.trim(), authPassword);
     setIsAuthenticating(false);
 
@@ -160,10 +180,82 @@ export default function ManageUsersScreen() {
     }
   };
 
+  const handleOpenCreateModal = () => {
+    setNewUsername('');
+    setNewEmail('');
+    setNewFullName('');
+    setNewPassword('');
+    setNewConfirmPassword('');
+    setNewRole('standard');
+    setCreateModalVisible(true);
+  };
+
+  const handleCreateUser = async () => {
+    if (!newUsername.trim() || !newEmail.trim() || !newFullName.trim() || !newPassword.trim()) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    if (!newEmail.includes('@')) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
+    if (newPassword !== newConfirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 3) {
+      Alert.alert('Error', 'Password must be at least 3 characters long');
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const existingUser = await databaseService.getUserByUsername(newUsername.trim());
+      if (existingUser) {
+        Alert.alert('Error', 'Username already exists');
+        setIsCreating(false);
+        return;
+      }
+
+      const passwordHash = hashPassword(newPassword);
+      await databaseService.createUser(
+        newUsername.trim(),
+        passwordHash,
+        newEmail.trim(),
+        newFullName.trim(),
+        newRole
+      );
+
+      Alert.alert('Success', 'User created successfully');
+      setCreateModalVisible(false);
+      loadUsers();
+    } catch (error) {
+      console.error('Error creating user:', error);
+      Alert.alert('Error', 'Failed to create user');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const renderUser = ({ item }: { item: UserType }) => (
     <View style={styles.userCard}>
       <View style={styles.userInfo}>
-        <Text style={styles.username}>{item.username}</Text>
+        <View style={styles.usernameRow}>
+          <Text style={styles.username}>{item.username}</Text>
+          <View style={[styles.roleBadge, item.role === 'admin' ? styles.adminBadge : styles.standardBadge]}>
+            {item.role === 'admin' ? (
+              <Shield size={12} color="#fff" />
+            ) : (
+              <Users size={12} color="#666" />
+            )}
+            <Text style={[styles.roleText, item.role === 'admin' ? styles.adminText : styles.standardText]}>
+              {item.role === 'admin' ? 'Admin' : 'Standard'}
+            </Text>
+          </View>
+        </View>
         <Text style={styles.email}>{item.email || 'No email'}</Text>
         <Text style={styles.createdDate}>
           Created: {item.createdAt.toLocaleDateString()}
@@ -176,14 +268,12 @@ export default function ManageUsersScreen() {
         >
           <Edit2 size={20} color={Colors.primary} />
         </TouchableOpacity>
-        {item.username !== 'fsj' && (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.deleteButton]}
-            onPress={() => handleDeleteUser(item)}
-          >
-            <Trash2 size={20} color="#ff4444" />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[styles.actionButton, styles.deleteButton]}
+          onPress={() => handleDeleteUser(item)}
+        >
+          <Trash2 size={20} color="#ff4444" />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -200,8 +290,8 @@ export default function ManageUsersScreen() {
 
         <View style={styles.authContainer}>
           <View style={styles.authCard}>
-            <Text style={styles.authTitle}>Root Access Required</Text>
-            <Text style={styles.authSubtitle}>Please authenticate to continue</Text>
+            <Text style={styles.authTitle}>Admin Access Required</Text>
+            <Text style={styles.authSubtitle}>Please authenticate with an admin account</Text>
 
             <View style={styles.authInputContainer}>
               <View style={styles.inputIcon}>
@@ -258,6 +348,9 @@ export default function ManageUsersScreen() {
           <ArrowLeft size={24} color={Colors.primary} />
         </TouchableOpacity>
         <Text style={styles.title}>Manage Users</Text>
+        <TouchableOpacity style={styles.addButton} onPress={handleOpenCreateModal}>
+          <UserPlus size={24} color={Colors.primary} />
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -365,6 +458,161 @@ export default function ManageUsersScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={createModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setCreateModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalTitle}>Create User</Text>
+
+              <View style={styles.inputContainer}>
+                <View style={styles.inputIcon}>
+                  <User size={20} color="#666" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Username"
+                  placeholderTextColor="#999"
+                  value={newUsername}
+                  onChangeText={setNewUsername}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isCreating}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <View style={styles.inputIcon}>
+                  <Mail size={20} color="#666" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email"
+                  placeholderTextColor="#999"
+                  value={newEmail}
+                  onChangeText={setNewEmail}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  editable={!isCreating}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <View style={styles.inputIcon}>
+                  <User size={20} color="#666" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Full Name"
+                  placeholderTextColor="#999"
+                  value={newFullName}
+                  onChangeText={setNewFullName}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  editable={!isCreating}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <View style={styles.inputIcon}>
+                  <Lock size={20} color="#666" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor="#999"
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isCreating}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <View style={styles.inputIcon}>
+                  <Lock size={20} color="#666" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Confirm Password"
+                  placeholderTextColor="#999"
+                  value={newConfirmPassword}
+                  onChangeText={setNewConfirmPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isCreating}
+                />
+              </View>
+
+              <Text style={styles.roleLabel}>User Level</Text>
+              <View style={styles.roleButtonsContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.roleButton,
+                    newRole === 'admin' && styles.roleButtonActive,
+                    newRole === 'admin' && styles.adminRoleActive,
+                  ]}
+                  onPress={() => setNewRole('admin')}
+                  disabled={isCreating}
+                >
+                  <Shield size={18} color={newRole === 'admin' ? '#fff' : '#666'} />
+                  <Text style={[
+                    styles.roleButtonText,
+                    newRole === 'admin' && styles.roleButtonTextActive,
+                  ]}>
+                    Admin
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.roleButton,
+                    newRole === 'standard' && styles.roleButtonActive,
+                    newRole === 'standard' && styles.standardRoleActive,
+                  ]}
+                  onPress={() => setNewRole('standard')}
+                  disabled={isCreating}
+                >
+                  <Users size={18} color={newRole === 'standard' ? '#fff' : '#666'} />
+                  <Text style={[
+                    styles.roleButtonText,
+                    newRole === 'standard' && styles.roleButtonTextActive,
+                  ]}>
+                    Standard
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setCreateModalVisible(false)}
+                  disabled={isCreating}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton, isCreating && styles.buttonDisabled]}
+                  onPress={handleCreateUser}
+                  disabled={isCreating}
+                >
+                  <Text style={styles.saveButtonText}>
+                    {isCreating ? 'Creating...' : 'Create'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -387,9 +635,13 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   title: {
+    flex: 1,
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: 'bold' as const,
     color: '#1a1a1a',
+  },
+  addButton: {
+    padding: 4,
   },
   list: {
     padding: 16,
@@ -408,11 +660,40 @@ const styles = StyleSheet.create({
   userInfo: {
     flex: 1,
   },
+  usernameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
   username: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#1a1a1a',
-    marginBottom: 4,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    gap: 4,
+  },
+  adminBadge: {
+    backgroundColor: Colors.primary,
+  },
+  standardBadge: {
+    backgroundColor: '#e0e0e0',
+  },
+  roleText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+  },
+  adminText: {
+    color: '#fff',
+  },
+  standardText: {
+    color: '#666',
   },
   email: {
     fontSize: 14,
@@ -464,7 +745,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: 'bold' as const,
     color: '#1a1a1a',
     marginBottom: 24,
     textAlign: 'center',
@@ -487,6 +768,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1a1a1a',
   },
+  roleLabel: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: '#333',
+    marginBottom: 12,
+  },
+  roleButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  roleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    gap: 8,
+  },
+  roleButtonActive: {
+    borderColor: 'transparent',
+  },
+  adminRoleActive: {
+    backgroundColor: Colors.primary,
+  },
+  standardRoleActive: {
+    backgroundColor: '#666',
+  },
+  roleButtonText: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: '#666',
+  },
+  roleButtonTextActive: {
+    color: '#fff',
+  },
   modalButtons: {
     flexDirection: 'row',
     gap: 12,
@@ -504,14 +825,17 @@ const styles = StyleSheet.create({
   saveButton: {
     backgroundColor: Colors.primary,
   },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
   cancelButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#666',
   },
   saveButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#fff',
   },
   authContainer: {
@@ -528,7 +852,7 @@ const styles = StyleSheet.create({
   },
   authTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: 'bold' as const,
     color: '#1a1a1a',
     marginBottom: 8,
     textAlign: 'center',
@@ -560,7 +884,7 @@ const styles = StyleSheet.create({
   },
   authButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     color: '#fff',
   },
 });

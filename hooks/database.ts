@@ -2,7 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Product, Transaction, AppSettings, ProductType } from '@/types/sales';
-import { User, Event, EventData } from '@/types/auth';
+import { User, Event, EventData, UserRole } from '@/types/auth';
 
 // Storage keys for web fallback
 const STORAGE_KEYS = {
@@ -131,6 +131,7 @@ class DatabaseService {
         passwordHash TEXT NOT NULL,
         email TEXT NOT NULL DEFAULT '',
         fullName TEXT NOT NULL DEFAULT '',
+        role TEXT NOT NULL DEFAULT 'standard',
         createdAt TEXT NOT NULL
       );
     `);
@@ -302,6 +303,11 @@ class DatabaseService {
       if (!usersColumnNames.includes('fullName')) {
         await this.db.execAsync('ALTER TABLE users ADD COLUMN fullName TEXT NOT NULL DEFAULT ""');
         console.log('✅ Added fullName column to users table');
+      }
+
+      if (!usersColumnNames.includes('role')) {
+        await this.db.execAsync('ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT "standard"');
+        console.log('✅ Added role column to users table');
       }
       
       // Check events table for promos column
@@ -1099,8 +1105,18 @@ class DatabaseService {
     }
   }
 
-  async createUser(username: string, passwordHash: string, email: string = '', fullName: string = ''): Promise<User> {
+  async createUser(username: string, passwordHash: string, email: string = '', fullName: string = '', role?: UserRole): Promise<User> {
     await this.initialize();
+    
+    // Determine role: if not specified, check if this is the first user (should be admin)
+    let userRole: UserRole = role || 'standard';
+    if (!role) {
+      const allUsers = await this.getAllUsers();
+      if (allUsers.length === 0) {
+        userRole = 'admin';
+        console.log('🔐 First user created - automatically set as admin');
+      }
+    }
     
     const user: User = {
       id: Date.now().toString(),
@@ -1108,6 +1124,7 @@ class DatabaseService {
       passwordHash,
       email,
       fullName,
+      role: userRole,
       createdAt: new Date()
     };
 
@@ -1123,8 +1140,8 @@ class DatabaseService {
     if (!this.db) throw new Error('Database not initialized');
 
     await this.db.runAsync(
-      'INSERT INTO users (id, username, passwordHash, email, fullName, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
-      [user.id, user.username, user.passwordHash, user.email, user.fullName, user.createdAt.toISOString()]
+      'INSERT INTO users (id, username, passwordHash, email, fullName, role, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [user.id, user.username, user.passwordHash, user.email, user.fullName, user.role, user.createdAt.toISOString()]
     );
     console.log('✅ User created in database');
     return user;
@@ -1141,7 +1158,8 @@ class DatabaseService {
         ...u,
         createdAt: new Date(u.createdAt),
         email: u.email || '',
-        fullName: u.fullName || ''
+        fullName: u.fullName || '',
+        role: u.role || 'standard'
       }));
     }
 
@@ -1157,6 +1175,7 @@ class DatabaseService {
       passwordHash: row.passwordHash,
       email: row.email || '',
       fullName: row.fullName || '',
+      role: (row.role || 'standard') as UserRole,
       createdAt: new Date(row.createdAt)
     }));
   }
@@ -1293,7 +1312,7 @@ class DatabaseService {
       if (!stored) return null;
       const users: any[] = JSON.parse(stored);
       const user = users.find(u => u.username === username);
-      return user ? { ...user, createdAt: new Date(user.createdAt), email: user.email || '', fullName: user.fullName || '' } : null;
+      return user ? { ...user, createdAt: new Date(user.createdAt), email: user.email || '', fullName: user.fullName || '', role: user.role || 'standard' } : null;
     }
 
     if (!this.db) throw new Error('Database not initialized');
@@ -1311,6 +1330,7 @@ class DatabaseService {
       passwordHash: result.passwordHash,
       email: result.email || '',
       fullName: result.fullName || '',
+      role: (result.role || 'standard') as UserRole,
       createdAt: new Date(result.createdAt),
       googleId: result.googleId,
       avatarUrl: result.avatarUrl
@@ -1330,6 +1350,7 @@ class DatabaseService {
         createdAt: new Date(user.createdAt), 
         email: user.email || '', 
         fullName: user.fullName || '',
+        role: user.role || 'standard',
         googleId: user.googleId,
         avatarUrl: user.avatarUrl
       } : null;
@@ -1350,6 +1371,7 @@ class DatabaseService {
       passwordHash: result.passwordHash,
       email: result.email || '',
       fullName: result.fullName || '',
+      role: (result.role || 'standard') as UserRole,
       createdAt: new Date(result.createdAt),
       googleId: result.googleId,
       avatarUrl: result.avatarUrl
@@ -1359,12 +1381,17 @@ class DatabaseService {
   async createUserFromGoogle(googleId: string, email: string, fullName: string, avatarUrl?: string): Promise<User> {
     await this.initialize();
 
+    // Check if this is the first user
+    const allUsers = await this.getAllUsers();
+    const userRole: UserRole = allUsers.length === 0 ? 'admin' : 'standard';
+
     const user: User = {
       id: `google_${googleId}`,
       username: email.split('@')[0],
       passwordHash: '',
       email,
       fullName,
+      role: userRole,
       createdAt: new Date(),
       googleId,
       avatarUrl
@@ -1382,8 +1409,8 @@ class DatabaseService {
     if (!this.db) throw new Error('Database not initialized');
 
     await this.db.runAsync(
-      'INSERT INTO users (id, username, passwordHash, email, fullName, createdAt, googleId, avatarUrl) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [user.id, user.username, user.passwordHash, user.email, user.fullName, user.createdAt.toISOString(), user.googleId || null, user.avatarUrl || null]
+      'INSERT INTO users (id, username, passwordHash, email, fullName, role, createdAt, googleId, avatarUrl) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [user.id, user.username, user.passwordHash, user.email, user.fullName, user.role, user.createdAt.toISOString(), user.googleId || null, user.avatarUrl || null]
     );
     console.log('✅ Google user created in database');
     return user;
@@ -2503,6 +2530,7 @@ class DatabaseService {
             passwordHash,
             email: '',
             fullName: '',
+            role: 'admin',
             createdAt: new Date()
           };
           const users = stored ? JSON.parse(stored) : [];
@@ -2526,6 +2554,7 @@ class DatabaseService {
             passwordHash: result.passwordHash,
             email: result.email || '',
             fullName: result.fullName || '',
+            role: (result.role || 'admin') as UserRole,
             createdAt: new Date(result.createdAt)
           };
           console.log('✅ Default user already exists');
@@ -2543,8 +2572,8 @@ class DatabaseService {
           console.log('🔐 Creating default user "fsj"...');
           const userId = Date.now().toString();
           await this.db.runAsync(
-            'INSERT INTO users (id, username, passwordHash, email, fullName, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
-            [userId, 'fsj', passwordHash, '', '', new Date().toISOString()]
+            'INSERT INTO users (id, username, passwordHash, email, fullName, role, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [userId, 'fsj', passwordHash, '', '', 'admin', new Date().toISOString()]
           );
           user = {
             id: userId,
@@ -2552,6 +2581,7 @@ class DatabaseService {
             passwordHash,
             email: '',
             fullName: '',
+            role: 'admin',
             createdAt: new Date()
           };
           console.log('✅ Default user "fsj" created successfully');
