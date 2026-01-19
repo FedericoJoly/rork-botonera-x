@@ -126,6 +126,15 @@ export default function LoginScreen() {
             </View>
 
             <TouchableOpacity
+              style={styles.forgotPasswordButton}
+              onPress={handleForgotPassword}
+              disabled={isLoading}
+            >
+              <KeyRound size={16} color="#666" />
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.button, styles.loginButton, isLoading && styles.buttonDisabled]}
               onPress={handleLogin}
               disabled={isLoading}
@@ -160,15 +169,6 @@ export default function LoginScreen() {
               <Text style={styles.buttonText}>
                 Continue with Google
               </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.forgotPasswordButton}
-              onPress={handleForgotPassword}
-              disabled={isLoading}
-            >
-              <KeyRound size={16} color="#666" />
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -286,10 +286,10 @@ const styles = StyleSheet.create({
   forgotPasswordButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
+    justifyContent: 'flex-end',
+    paddingVertical: 4,
     gap: 6,
-    marginTop: 8,
+    marginBottom: 8,
   },
   forgotPasswordText: {
     fontSize: 14,
