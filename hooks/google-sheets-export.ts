@@ -510,8 +510,14 @@ export async function createAndExportSpreadsheet(
       return { success: true };
     }
 
+    const binaryString = atob(xlsxData);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
     const file = new File(Paths.cache, fileName);
-    file.write(xlsxData, { encoding: 'base64' });
+    file.write(bytes);
     console.log('📄 Excel file created at:', file.uri);
 
     const isAvailable = await Sharing.isAvailableAsync();
